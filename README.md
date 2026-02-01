@@ -307,6 +307,37 @@ done
 
 5. **Проверка**: выполнить скрипт `scripts/check-grafana-metrics-in-prometheus.sh` или быструю проверку ключевых метрик (см. раздел [Проверка наличия метрик (Prometheus)](#проверка-наличия-метрик-prometheus)).
 
+#### Команды для JMX-метрик брокеров (Strimzi Kafka, Strimzi KRaft)
+
+Если Kafka уже развёрнут из kafka-jbod, добавьте JMX-метрики без замены кластера:
+
+```bash
+# 1. Извлечь ConfigMap kafka-metrics из kafka-metrics.yaml и применить в namespace Kafka
+curl -sL https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/kafka-metrics.yaml | \
+  awk '/^---$/{out=""} {out=out $0 "\n"} END{print out}' | kubectl apply -n myproject -f -
+
+# 2. Добавить metricsConfig в существующий Kafka CR (подставьте my-cluster и myproject)
+kubectl patch kafka my-cluster -n myproject --type=json -p='[{"op": "add", "path": "/spec/kafka/metricsConfig", "value": {"type": "jmxPrometheusExporter", "valueFrom": {"configMapKeyRef": {"name": "kafka-metrics", "key": "kafka-metrics-config.yml"}}}}]'
+
+# 3. PodMonitor для брокеров (если ещё не применён)
+curl -sL https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/prometheus-install/pod-monitors/kafka-resources-metrics.yaml | kubectl apply -n monitoring -f -
+kubectl label podmonitor -n monitoring kafka-resources-metrics release=kube-prometheus-stack --overwrite
+
+# 4. Дождаться перезапуска брокеров (Strimzi добавит JMX Exporter sidecar)
+kubectl rollout status statefulset/my-cluster-kafka -n myproject --timeout=600s
+```
+
+#### Команды для метрик Cluster Operator (Strimzi Operators)
+
+```bash
+# PodMonitors для Cluster и Entity Operator (если ещё не применены)
+curl -sL https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/prometheus-install/pod-monitors/cluster-operator-metrics.yaml | kubectl apply -n monitoring -f -
+curl -sL https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/prometheus-install/pod-monitors/entity-operator-metrics.yaml | kubectl apply -n monitoring -f -
+
+kubectl label podmonitor -n monitoring cluster-operator-metrics entity-operator-metrics release=kube-prometheus-stack --overwrite
+kubectl patch podmonitor -n monitoring cluster-operator-metrics --type=json -p='[{"op": "replace", "path": "/spec/namespaceSelector/matchNames", "value": ["strimzi"]}]'
+```
+
 Подробнее: таблица [Можно ли отсутствующие метрики получить из репозитория Strimzi?](#можно-ли-отсутствующие-метрики-получить-из-репозитория-strimzi) и раздел [Почему большинство метрик отсутствуют](#почему-большинство-метрик-отсутствуют).
 
 ### Можно ли отсутствующие метрики получить из репозитория Strimzi?
