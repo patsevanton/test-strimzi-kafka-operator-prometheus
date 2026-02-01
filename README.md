@@ -132,10 +132,27 @@ https://github.com/strimzi/strimzi-kafka-operator/blob/main/packaging/examples/m
 
 ### Проверка наличия метрик (Prometheus)
 
-После установки убедиться, что Prometheus собирает метрики для дашбордов Strimzi. Из пода в кластере:
+После установки убедиться, что Prometheus собирает метрики для дашбордов Strimzi.
+
+**Скрипт проверки всех метрик** из JSON-дашбордов Grafana (извлечены из `packaging/examples/metrics/grafana-dashboards/`):
 
 ```bash
-# Проверка ключевых метрик по дашбордам (запрос к Prometheus API из пода в кластере)
+# Вариант 1: port-forward в отдельном терминале, затем:
+kubectl port-forward -n monitoring svc/kube-prometheus-stack-prometheus 9090:9090
+
+# В другом терминале:
+PROM_URL=http://localhost:9090 ./scripts/check-grafana-metrics-in-prometheus.sh
+```
+
+```bash
+# Вариант 2: из пода Prometheus в кластере (если есть curl):
+kubectl cp scripts/check-grafana-metrics-in-prometheus.sh monitoring/$(kubectl get pod -n monitoring -l app.kubernetes.io/name=prometheus -o jsonpath='{.items[0].metadata.name}'):/tmp/check.sh
+kubectl exec -n monitoring deploy/kube-prometheus-stack-prometheus -- sh -c 'PROM_URL=http://localhost:9090 sh /tmp/check.sh'
+```
+
+**Быстрая проверка ключевых метрик** (из пода в кластере):
+
+```bash
 PROM="http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090/api/v1/query"
 for m in strimzi_resources strimzi_reconciliations_total kafka_topic_partitions strimzi_kafka_topic_resource_info container_memory_usage_bytes; do
   r=$(curl -sG "$PROM" --data-urlencode "query=$m"); echo -n "$m: "; echo "$r" | grep -q '"result":\[\]' && echo "нет" || (echo "$r" | grep -q '"result":\[' && echo "есть" || echo "?")
@@ -240,6 +257,29 @@ done
 - `jvm_memory_used_bytes` — **нет**
 - `jvm_gc_pause_seconds_sum` — **нет**
 - `jvm_gc_pause_seconds_count` — **нет**
+
+### Как активировать метрики
+
+Чтобы дашборды Grafana (Strimzi) показывали данные, нужно включить сбор метрик и настроить Prometheus:
+
+1. **Метрики брокеров Kafka (JMX)** — `kafka_server_*`, `jvm_*`, `kafka_log_*`, `kafka_cluster_partition_atminisr` и др.:
+   - Применить [kafka-metrics.yaml](https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/kafka-metrics.yaml) в namespace кластера (или добавить в существующий Kafka CR блок `spec.kafka.metricsConfig` и ConfigMap `kafka-metrics`).
+   - Применить PodMonitor для брокеров в namespace `monitoring` и добавить label `release=kube-prometheus-stack` (см. раздел [Metrics (examples/metrics)](#metrics-examplesmetrics)).
+
+2. **Метрики Cluster/Entity Operator** — `strimzi_resources`, `strimzi_reconciliations_*`, `strimzi_certificate_expiration_timestamp_ms`:
+   - Применить PodMonitors `cluster-operator-metrics.yaml` и при необходимости `entity-operator-metrics.yaml` из `prometheus-install/pod-monitors/` в namespace `monitoring`.
+   - Добавить label `release=kube-prometheus-stack` и для cluster-operator поправить `namespaceSelector.matchNames` на `["strimzi"]` (см. раздел [Metrics (examples/metrics)](#metrics-examplesmetrics)).
+
+3. **Метрики по CR (Kafka, Topic, User)** — `strimzi_kafka_*`, `strimzi_pod_set_*`:
+   - Развернуть strimzi-kube-state-metrics (configmap + ksm.yaml) и пометить ServiceMonitor и Service нужными labels (см. раздел [Metrics (examples/metrics)](#metrics-examplesmetrics)).
+
+4. **Метрики топиков/офсетов/consumer groups** — Kafka Exporter:
+   - Установить Helm chart `prometheus-kafka-exporter` с ServiceMonitor и указать bootstrap брокеров (см. раздел [Kafka Exporter](#kafka-exporter)).
+   - Для `kafka_consumergroup_*`: нужны активные consumer groups и права DescribeGroups (ACL для KafkaUser).
+
+5. **Проверка**: выполнить скрипт `scripts/check-grafana-metrics-in-prometheus.sh` или быструю проверку ключевых метрик (см. раздел [Проверка наличия метрик (Prometheus)](#проверка-наличия-метрик-prometheus)).
+
+Подробнее: таблица [Можно ли отсутствующие метрики получить из репозитория Strimzi?](#можно-ли-отсутствующие-метрики-получить-из-репозитория-strimzi) и раздел [Почему большинство метрик отсутствуют](#почему-большинство-метрик-отсутствуют).
 
 ### Можно ли отсутствующие метрики получить из репозитория Strimzi?
 
