@@ -32,98 +32,91 @@ echo
 
 ### Установка Strimzi
 
-Namespace должен существовать заранее, если вы добавляете его в watchNamespaces
+Namespace `myproject` должен существовать заранее (в примерах Strimzi по умолчанию используется именно он):
+
+```bash
+kubectl create namespace myproject
+```
+
 ```bash
 helm upgrade --install strimzi-cluster-operator \
   oci://quay.io/strimzi-helm/strimzi-kafka-operator \
   --namespace strimzi \
   --create-namespace \
-  --set 'watchNamespaces={default}' \
+  --set 'watchNamespaces={myproject}' \
   --wait \
   --version 0.50.0
 ```
 
 ### Установка Kafka из examples
 
-CRD устанавливаются оператором Strimzi. После установки оператора применить ресурсы Kafka из examples:
-
-
-Clone repo
-```bash
-git clone https://github.com/strimzi/strimzi-kafka-operator.git
-cd strimzi-kafka-operator/packaging/examples/
-```
-
 ```bash
 # Kafka-кластер (JBOD)
-curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/kafka/kafka-jbod.yaml | kubectl apply -f -
+curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/kafka/kafka-jbod.yaml | kubectl apply -n myproject -f -
 
 # Топик
-curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/topic/kafka-topic.yaml | kubectl apply -f -
+curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/topic/kafka-topic.yaml | kubectl apply -n myproject -f -
 
 # Пользователь Kafka
-curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/user/kafka-user.yaml | kubectl apply -f -
+curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/user/kafka-user.yaml | kubectl apply -n myproject -f -
 ```
 
 ### Metrics (examples/metrics)
 
 ```bash
 # Включить метрики на Kafka-кластере
-curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/kafka-metrics.yaml | kubectl apply -f -
+curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/kafka-metrics.yaml | kubectl apply -n myproject -f -
 
-# PodMonitors и правила для Prometheus/VictoriaMetrics (namespace monitoring)
-curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/prometheus-install/pod-monitors/cluster-operator-metrics.yaml | kubectl apply -f -
+# PodMonitors и правила для Prometheus/VictoriaMetrics (применяем в namespace monitoring)
+curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/prometheus-install/pod-monitors/cluster-operator-metrics.yaml | kubectl apply -n monitoring -f -
 
-curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/prometheus-install/pod-monitors/entity-operator-metrics.yaml | kubectl apply -f -
+curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/prometheus-install/pod-monitors/entity-operator-metrics.yaml | kubectl apply -n monitoring -f -
 
-curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/prometheus-install/pod-monitors/kafka-resources-metrics.yaml | kubectl apply -f -
+curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/prometheus-install/pod-monitors/kafka-resources-metrics.yaml | kubectl apply -n monitoring -f -
 
-# В примерах Strimzi по умолчанию namespaceSelector: myproject. Если оператор в strimzi, Kafka в default — поправить namespace:
-kubectl label podmonitor -n default cluster-operator-metrics entity-operator-metrics kafka-resources-metrics release=kube-prometheus-stack --overwrite
-kubectl patch podmonitor -n default cluster-operator-metrics --type=json -p='[{"op": "replace", "path": "/spec/namespaceSelector/matchNames", "value": ["strimzi"]}]'
-kubectl patch podmonitor -n default entity-operator-metrics --type=json -p='[{"op": "replace", "path": "/spec/namespaceSelector/matchNames", "value": ["default"]}]'
-kubectl patch podmonitor -n default kafka-resources-metrics --type=json -p='[{"op": "replace", "path": "/spec/namespaceSelector/matchNames", "value": ["default"]}]'
+# В примерах Strimzi по умолчанию namespaceSelector: myproject (Kafka и Entity Operator в myproject). Добавить label для kube-prometheus-stack и поправить только cluster-operator на namespace strimzi:
+kubectl label podmonitor -n monitoring cluster-operator-metrics entity-operator-metrics kafka-resources-metrics release=kube-prometheus-stack --overwrite
+kubectl patch podmonitor -n monitoring cluster-operator-metrics --type=json -p='[{"op": "replace", "path": "/spec/namespaceSelector/matchNames", "value": ["strimzi"]}]'
+# entity-operator-metrics и kafka-resources-metrics уже с matchNames: [myproject] — не патчим
 ```
 
 ```bash
 # 1. ConfigMap с конфигом метрик по CRD Strimzi
-curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/kube-state-metrics/configmap.yaml | kubectl apply -f -
+curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/kube-state-metrics/configmap.yaml | kubectl apply -n myproject -f -
 
 # 2. Deployment, Service, RBAC и ServiceMonitor
-curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/kube-state-metrics/ksm.yaml | kubectl apply -f -
+curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/kube-state-metrics/ksm.yaml | kubectl apply -n myproject -f -
 
 # 3. Добавить label release: kube-prometheus-stack в ServiceMonitor, чтобы Prometheus его выбирал
-kubectl label servicemonitor -n default strimzi-kube-state-metrics release=kube-prometheus-stack --overwrite
+kubectl label servicemonitor -n myproject strimzi-kube-state-metrics release=kube-prometheus-stack --overwrite
 
 # 4. Добавить labels на Service (в манифесте Strimzi их нет — ServiceMonitor не находит Service)
-kubectl label svc -n default strimzi-kube-state-metrics app.kubernetes.io/name=kube-state-metrics app.kubernetes.io/instance=strimzi-kube-state-metrics --overwrite
+kubectl label svc -n myproject strimzi-kube-state-metrics app.kubernetes.io/name=kube-state-metrics app.kubernetes.io/instance=strimzi-kube-state-metrics --overwrite
 
-# 5. Исправить ClusterRoleBinding: в манифесте namespace=myproject, при деплое в default — патчим
-kubectl patch clusterrolebinding strimzi-kube-state-metrics --type='json' -p='[{"op": "replace", "path": "/subjects/0/namespace", "value": "default"}]'
+# 5. В манифесте Strimzi namespace=myproject — при деплое в myproject патч не нужен
 ```
 
 ## Kafka Exporter
 
 - Strimzi — оператор для управления Kafka в Kubernetes; мониторинг вынесен в отдельные компоненты.
 - Kafka Exporter — сторонний проект ([danielqsj/kafka_exporter](https://github.com/danielqsj/kafka_exporter)), который подключается к брокерам по Kafka API и отдаёт метрики в формате Prometheus.
-- Разделение даёт гибкость: можно не ставить экспортер, использовать другой (например, JMX Exporter или Strimzi Metrics Reporter) или ограничить доступ к метрикам (топики, consumer groups) по соображениям безопасности.
 
 **Установка (Helm, Prometheus Operator)**
 
 Репозиторий уже добавлен для kube-prometheus-stack:
 
 ```bash
-# Установить Kafka Exporter (адрес брокеров — для Strimzi в default: my-cluster-kafka-bootstrap:9092)
+# Установить Kafka Exporter (адрес брокеров — для Strimzi в myproject: my-cluster-kafka-bootstrap:9092)
 helm upgrade --install prometheus-kafka-exporter \
   prometheus-community/prometheus-kafka-exporter \
   --namespace monitoring \
   --create-namespace \
-  --set kafkaServer[0]=my-cluster-kafka-bootstrap.default.svc.cluster.local:9092 \
+  --set kafkaServer[0]=my-cluster-kafka-bootstrap.myproject.svc.cluster.local:9092 \
   --set prometheus.serviceMonitor.enabled=true \
   --set prometheus.serviceMonitor.additionalLabels.release=kube-prometheus-stack
 ```
 
-Проверка: в Prometheus — target `strimzi-kube-state-metrics` (namespace default), метрики `strimzi_kafka_topic_resource_info`, `strimzi_kafka_user_resource_info`, `strimzi_kafka_resource_info`, `strimzi_pod_set_resource_info` и т.д.
+Проверка: в Prometheus — target `strimzi-kube-state-metrics` (namespace myproject), метрики `strimzi_kafka_topic_resource_info`, `strimzi_kafka_user_resource_info`, `strimzi_kafka_resource_info`, `strimzi_pod_set_resource_info` и т.д.
 
 # Импорт Дашборды Grafana — импорт JSON из examples/metrics/grafana-dashboards/ через UI Grafana:
 
@@ -138,12 +131,12 @@ https://github.com/strimzi/strimzi-kafka-operator/blob/main/packaging/examples/m
 ## Статус проверки
 
 ### Strimzi в K8s
-- **Установлен** — pods: `strimzi-cluster-operator` (strimzi), `strimzi-kube-state-metrics` (default)
+- **Установлен** — pods: `strimzi-cluster-operator` (strimzi), `strimzi-kube-state-metrics` (myproject)
 - **CRD** — kafkas, kafkatopics, kafkausers и др.
 - **Kafka** — my-cluster (Ready), my-topic, my-user
 
 ### strimzi-kube-state-metrics в Prometheus (2026-02-01)
-- **Target** — есть (default/strimzi-kube-state-metrics, health: up). Требовались: labels на Service (шаг 4) и patch ClusterRoleBinding (шаг 5).
+- **Target** — есть (myproject/strimzi-kube-state-metrics, health: up). Требовались: labels на Service (шаг 4). При деплое в myproject patch ClusterRoleBinding не нужен.
 - **Метрики** — есть: `strimzi_kafka_topic_resource_info`, `strimzi_kafka_user_resource_info`, `strimzi_kafka_resource_info`, `strimzi_kafka_node_pool_resource_info`, `strimzi_pod_set_resource_info`.
 
 ### Метрики из JSON-дашбордов Grafana (Strimzi)
@@ -273,7 +266,7 @@ https://github.com/strimzi/strimzi-kafka-operator/blob/main/packaging/examples/m
 - **`strimzi_resources`**, **`strimzi_reconciliations_*`**, **`strimzi_certificate_expiration_timestamp_ms`** — отдаёт **Strimzi Cluster Operator** (и при необходимости Entity Operator) со своего HTTP `/metrics`. Нужны **PodMonitor’ы/ServiceMonitor’ы** для оператора с label `release: kube-prometheus-stack`:
   - `cluster-operator-metrics.yaml` и при использовании Entity Operator — `entity-operator-metrics.yaml` из `prometheus-install/pod-monitors/`, применённые в namespace `monitoring`. Без них Prometheus не скрейпит метрики оператора, дашборд «Operators» пустой.
 - **`jvm_memory_used_bytes`**, **`jvm_gc_pause_seconds_*`** — JMX-метрики JVM контейнеров `strimzi-cluster-operator`, `topic-operator`, `user-operator`. Появляются, когда для этих подов настроен сбор метрик (например, через те же PodMonitor’ы для операторов с аннотациями/конфигом JMX).
-- Для метрик по CR (Kafka, KafkaTopic, KafkaUser и т.д.) отдельно используется **strimzi-kube-state-metrics**; его ServiceMonitor в namespace деплоя должен иметь label `release: kube-prometheus-stack`:
+- Для метрик по CR (Kafka, KafkaTopic, KafkaUser и т.д.) отдельно используется **strimzi-kube-state-metrics**; его ServiceMonitor в namespace деплоя (myproject) должен иметь label `release: kube-prometheus-stack`:
   ```bash
-  kubectl label servicemonitor -n default strimzi-kube-state-metrics release=kube-prometheus-stack --overwrite
+  kubectl label servicemonitor -n myproject strimzi-kube-state-metrics release=kube-prometheus-stack --overwrite
   ```
