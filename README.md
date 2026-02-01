@@ -88,9 +88,36 @@ curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/pa
 
 # 3. Добавить label release: kube-prometheus-stack в ServiceMonitor, чтобы Prometheus его выбирал
 kubectl label servicemonitor -n default strimzi-kube-state-metrics release=kube-prometheus-stack --overwrite
+
+# 4. Добавить labels на Service (в манифесте Strimzi их нет — ServiceMonitor не находит Service)
+kubectl label svc -n default strimzi-kube-state-metrics app.kubernetes.io/name=kube-state-metrics app.kubernetes.io/instance=strimzi-kube-state-metrics --overwrite
+
+# 5. Исправить ClusterRoleBinding: в манифесте namespace=myproject, при деплое в default — патчим
+kubectl patch clusterrolebinding strimzi-kube-state-metrics --type='json' -p='[{"op": "replace", "path": "/subjects/0/namespace", "value": "default"}]'
 ```
 
-Проверка: в Prometheus должен появиться target для `strimzi-kube-state-metrics` в namespace `monitoring`, метрики с префиксами `strimzi_kafka_topic_*`, `strimzi_kafka_user_*`, `strimzi_kafka_*` и т.д.
+## Kafka Exporter
+
+- Strimzi — оператор для управления Kafka в Kubernetes; мониторинг вынесен в отдельные компоненты.
+- Kafka Exporter — сторонний проект ([danielqsj/kafka_exporter](https://github.com/danielqsj/kafka_exporter)), который подключается к брокерам по Kafka API и отдаёт метрики в формате Prometheus.
+- Разделение даёт гибкость: можно не ставить экспортер, использовать другой (например, JMX Exporter или Strimzi Metrics Reporter) или ограничить доступ к метрикам (топики, consumer groups) по соображениям безопасности.
+
+**Установка (Helm, Prometheus Operator)**
+
+Репозиторий уже добавлен для kube-prometheus-stack:
+
+```bash
+# Установить Kafka Exporter (адрес брокеров — для Strimzi в default: my-cluster-kafka-bootstrap:9092)
+helm upgrade --install prometheus-kafka-exporter \
+  prometheus-community/prometheus-kafka-exporter \
+  --namespace monitoring \
+  --create-namespace \
+  --set kafkaServer[0]=my-cluster-kafka-bootstrap.default.svc.cluster.local:9092 \
+  --set prometheus.serviceMonitor.enabled=true \
+  --set prometheus.serviceMonitor.additionalLabels.release=kube-prometheus-stack
+```
+
+Проверка: в Prometheus — target `strimzi-kube-state-metrics` (namespace default), метрики `strimzi_kafka_topic_resource_info`, `strimzi_kafka_user_resource_info`, `strimzi_kafka_resource_info`, `strimzi_pod_set_resource_info` и т.д.
 
 # Импорт Дашборды Grafana — импорт JSON из examples/metrics/grafana-dashboards/ через UI Grafana:
 
@@ -102,14 +129,16 @@ https://github.com/strimzi/strimzi-kafka-operator/blob/main/packaging/examples/m
 
 https://github.com/strimzi/strimzi-kafka-operator/blob/main/packaging/examples/metrics/grafana-dashboards/strimzi-operators.json
 
-
-
-## Статус проверки (2026-02-01)
+## Статус проверки
 
 ### Strimzi в K8s
 - **Установлен** — pods: `strimzi-cluster-operator` (strimzi), `strimzi-kube-state-metrics` (default)
 - **CRD** — kafkas, kafkatopics, kafkausers и др.
 - **Kafka** — my-cluster (Ready), my-topic, my-user
+
+### strimzi-kube-state-metrics в Prometheus (2026-02-01)
+- **Target** — есть (default/strimzi-kube-state-metrics, health: up). Требовались: labels на Service (шаг 4) и patch ClusterRoleBinding (шаг 5).
+- **Метрики** — есть: `strimzi_kafka_topic_resource_info`, `strimzi_kafka_user_resource_info`, `strimzi_kafka_resource_info`, `strimzi_kafka_node_pool_resource_info`, `strimzi_pod_set_resource_info`.
 
 ### Метрики из JSON-дашбордов Grafana (Strimzi)
 
@@ -225,25 +254,3 @@ https://github.com/strimzi/strimzi-kafka-operator/blob/main/packaging/examples/m
   ```bash
   kubectl label servicemonitor -n default strimzi-kube-state-metrics release=kube-prometheus-stack --overwrite
   ```
-
-## Kafka Exporter
-
-- Strimzi — оператор для управления Kafka в Kubernetes; мониторинг вынесен в отдельные компоненты.
-- Kafka Exporter — сторонний проект ([danielqsj/kafka_exporter](https://github.com/danielqsj/kafka_exporter)), который подключается к брокерам по Kafka API и отдаёт метрики в формате Prometheus.
-- Разделение даёт гибкость: можно не ставить экспортер, использовать другой (например, JMX Exporter или Strimzi Metrics Reporter) или ограничить доступ к метрикам (топики, consumer groups) по соображениям безопасности.
-
-**Установка (Helm, Prometheus Operator)**
-
-Репозиторий уже добавлен для kube-prometheus-stack:
-
-```bash
-# Установить Kafka Exporter (адрес брокеров — для Strimzi в default: my-cluster-kafka-bootstrap:9092)
-helm upgrade --install prometheus-kafka-exporter \
-  prometheus-community/prometheus-kafka-exporter \
-  --namespace monitoring \
-  --create-namespace \
-  --set kafkaServer[0]=my-cluster-kafka-bootstrap.default.svc.cluster.local:9092 \
-  --set prometheus.serviceMonitor.enabled=true \
-  --set prometheus.serviceMonitor.additionalLabels.release=kube-prometheus-stack
-```
-
