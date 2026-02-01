@@ -1,0 +1,122 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "kafka-producer.fullname" . }}
+  labels:
+    {{- include "kafka-producer.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "kafka-producer.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "kafka-producer.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "kafka-producer.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: MODE
+              value: "producer"
+            - name: KAFKA_BROKERS
+              value: {{ .Values.kafka.brokers | quote }}
+            - name: KAFKA_TOPIC
+              value: {{ .Values.kafka.topic | quote }}
+            - name: SCHEMA_REGISTRY_URL
+              value: {{ .Values.schemaRegistry.url | quote }}
+            {{- if .Values.secrets.name }}
+            {{- if .Values.secrets.strimzi }}
+            # Strimzi KafkaUser secret: имя пользователя = имя secret, пароль из secret
+            - name: KAFKA_USERNAME
+              value: {{ .Values.secrets.name | quote }}
+            - name: KAFKA_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.name }}
+                  key: password
+            {{- else }}
+            # Пользовательский secret с ключами username и password
+            - name: KAFKA_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "kafka-producer.secretName" . }}
+                  key: username
+            - name: KAFKA_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "kafka-producer.secretName" . }}
+                  key: password
+            {{- end }}
+            {{- else if .Values.secrets.create }}
+            - name: KAFKA_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "kafka-producer.secretName" . }}
+                  key: username
+            - name: KAFKA_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "kafka-producer.secretName" . }}
+                  key: password
+            {{- else if .Values.kafka.username }}
+            - name: KAFKA_USERNAME
+              value: {{ .Values.kafka.username | quote }}
+            {{- if .Values.kafka.password }}
+            - name: KAFKA_PASSWORD
+              value: {{ .Values.kafka.password | quote }}
+            {{- end }}
+            {{- end }}
+            - name: HEALTH_PORT
+              value: {{ .Values.health.port | quote }}
+          ports:
+            - name: health
+              containerPort: {{ .Values.health.port }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: health
+            initialDelaySeconds: {{ .Values.health.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.health.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.health.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.health.livenessProbe.failureThreshold }}
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: health
+            initialDelaySeconds: {{ .Values.health.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.health.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.health.readinessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.health.readinessProbe.failureThreshold }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

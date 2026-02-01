@@ -1,0 +1,91 @@
+replicaCount: 1
+
+image:
+  repository: antonpatsev/strimzi-kafka-chaos-testing
+  pullPolicy: IfNotPresent
+  tag: "3.4.0"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext: {}
+  # fsGroup: 2000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+# Конфигурация Kafka
+kafka:
+  # Сервис Strimzi bootstrap (работает между namespace через DNS)
+  brokers: "kafka-cluster-kafka-bootstrap.kafka-cluster:9092"
+  topic: "test-topic"
+  groupId: "test-group"
+  username: ""
+  password: ""
+
+# Конфигурация Schema Registry
+schemaRegistry:
+  # Сервис развёрнут в namespace "schema-registry" в этом репозитории
+  url: "http://schema-registry.schema-registry:8081"
+
+# Конфигурация секретов
+secrets:
+  # Если true, создать secret для учётных данных Kafka
+  create: false
+  # Имя secret (если не используется по умолчанию)
+  # Для Strimzi: используйте имя KafkaUser (например, "myuser")
+  name: ""
+  # Если true, использовать формат secret от Strimzi KafkaUser (username = имя secret, только ключ password)
+  strimzi: true
+  # Имя пользователя Kafka (будет сохранено в secret если secrets.create = true)
+  username: ""
+  # Пароль Kafka (будет сохранён в secret если secrets.create = true)
+  password: ""
+
+# Конфигурация проверки здоровья
+health:
+  port: 8080
+  livenessProbe:
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readinessProbe:
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
