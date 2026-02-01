@@ -99,7 +99,7 @@ https://github.com/strimzi/strimzi-kafka-operator/blob/main/packaging/examples/m
 
 https://github.com/strimzi/strimzi-kafka-operator/blob/main/packaging/examples/metrics/grafana-dashboards/strimzi-operators.json
 
----
+
 
 ## Статус проверки (2026-02-01)
 
@@ -196,8 +196,33 @@ https://github.com/strimzi/strimzi-kafka-operator/blob/main/packaging/examples/m
 сдел
 ### Почему большинство метрик отсутствуют
 
-- **Kafka Exporter** — не установлен (отдельный компонент, не входит в Strimzi)
+- **Kafka Exporter** — не установлен (отдельный компонент, не входит в Strimzi). См. ниже раздел «Kafka Exporter».
 - **strimzi_*** — ServiceMonitor `strimzi-kube-state-metrics` в namespace `default` не имеет label `release: kube-prometheus-stack`, Prometheus его не выбирает
 - **kafka_server_***, **jvm_*** — PodMonitors (cluster-operator, entity-operator, kafka-resources) не применены или не выбираются Prometheus; метрики Kafka включить через kafka-metrics.yaml и применить PodMonitors в namespace `monitoring` с label `release: kube-prometheus-stack`
 - **container_***, **kubelet_***, **process_open_fds** — собираются kubelet и node-exporter (уже есть)
+
+
+
+## Kafka Exporter
+
+**Почему Kafka Exporter не входит в Strimzi**
+
+- Strimzi — оператор для управления Kafka в Kubernetes; мониторинг вынесен в отдельные компоненты.
+- Kafka Exporter — сторонний проект ([danielqsj/kafka_exporter](https://github.com/danielqsj/kafka_exporter)), который подключается к брокерам по Kafka API и отдаёт метрики в формате Prometheus.
+- Разделение даёт гибкость: можно не ставить экспортер, использовать другой (например, JMX Exporter или Strimzi Metrics Reporter) или ограничить доступ к метрикам (топики, consumer groups) по соображениям безопасности.
+
+**Установка (Helm, Prometheus Operator)**
+
+Репозиторий уже добавлен для kube-prometheus-stack:
+
+```bash
+# Установить Kafka Exporter (адрес брокеров — для Strimzi в default: my-cluster-kafka-bootstrap:9092)
+helm upgrade --install prometheus-kafka-exporter \
+  prometheus-community/prometheus-kafka-exporter \
+  --namespace monitoring \
+  --create-namespace \
+  --set kafkaServer[0]=my-cluster-kafka-bootstrap.default.svc.cluster.local:9092 \
+  --set prometheus.serviceMonitor.enabled=true \
+  --set prometheus.serviceMonitor.additionalLabels.release=kube-prometheus-stack
+```
 
