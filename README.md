@@ -29,6 +29,9 @@ echo
 
 5. Открыть Grafana: http://grafana.apatsev.org.ru (логин по умолчанию: `admin`).
 
+### Strimzi
+
+Strimzi — оператор для управления Kafka в Kubernetes; мониторинг вынесен в отдельные компоненты (Kafka Exporter, kube-state-metrics, PodMonitors для брокеров и операторов).
 
 ### Установка Strimzi
 
@@ -98,7 +101,6 @@ kubectl label svc -n myproject strimzi-kube-state-metrics app.kubernetes.io/name
 
 ## Kafka Exporter
 
-- Strimzi — оператор для управления Kafka в Kubernetes; мониторинг вынесен в отдельные компоненты.
 - Kafka Exporter — сторонний проект ([danielqsj/kafka_exporter](https://github.com/danielqsj/kafka_exporter)), который подключается к брокерам по Kafka API и отдаёт метрики в формате Prometheus.
 
 **Установка (Helm, Prometheus Operator)**
@@ -127,6 +129,20 @@ https://github.com/strimzi/strimzi-kafka-operator/blob/main/packaging/examples/m
 https://github.com/strimzi/strimzi-kafka-operator/blob/main/packaging/examples/metrics/grafana-dashboards/strimzi-kraft.json
 
 https://github.com/strimzi/strimzi-kafka-operator/blob/main/packaging/examples/metrics/grafana-dashboards/strimzi-operators.json
+
+### Проверка наличия метрик (Prometheus)
+
+После установки убедиться, что Prometheus собирает метрики для дашбордов Strimzi. Из пода в кластере:
+
+```bash
+# Проверка ключевых метрик по дашбордам (запрос к Prometheus API из пода в кластере)
+PROM="http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090/api/v1/query"
+for m in strimzi_resources strimzi_reconciliations_total kafka_topic_partitions strimzi_kafka_topic_resource_info container_memory_usage_bytes; do
+  r=$(curl -sG "$PROM" --data-urlencode "query=$m"); echo -n "$m: "; echo "$r" | grep -q '"result":\[\]' && echo "нет" || (echo "$r" | grep -q '"result":\[' && echo "есть" || echo "?")
+done
+```
+
+Либо в UI Prometheus (Status → Targets): targets `strimzi-kube-state-metrics`, `cluster-operator-metrics`, `kafka-resources-metrics`, `prometheus-kafka-exporter` в состоянии up.
 
 ## Статус проверки
 
