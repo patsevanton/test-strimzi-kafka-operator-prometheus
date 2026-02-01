@@ -77,6 +77,12 @@ curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/pa
 curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/prometheus-install/pod-monitors/entity-operator-metrics.yaml | kubectl apply -f -
 
 curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/prometheus-install/pod-monitors/kafka-resources-metrics.yaml | kubectl apply -f -
+
+# В примерах Strimzi по умолчанию namespaceSelector: myproject. Если оператор в strimzi, Kafka в default — поправить namespace:
+kubectl label podmonitor -n default cluster-operator-metrics entity-operator-metrics kafka-resources-metrics release=kube-prometheus-stack --overwrite
+kubectl patch podmonitor -n default cluster-operator-metrics --type=json -p='[{"op": "replace", "path": "/spec/namespaceSelector/matchNames", "value": ["strimzi"]}]'
+kubectl patch podmonitor -n default entity-operator-metrics --type=json -p='[{"op": "replace", "path": "/spec/namespaceSelector/matchNames", "value": ["default"]}]'
+kubectl patch podmonitor -n default kafka-resources-metrics --type=json -p='[{"op": "replace", "path": "/spec/namespaceSelector/matchNames", "value": ["default"]}]'
 ```
 
 ```bash
@@ -225,6 +231,23 @@ https://github.com/strimzi/strimzi-kafka-operator/blob/main/packaging/examples/m
 - `jvm_memory_used_bytes` — **нет**
 - `jvm_gc_pause_seconds_sum` — **нет**
 - `jvm_gc_pause_seconds_count` — **нет**
+
+### Можно ли отсутствующие метрики получить из репозитория Strimzi?
+
+**Да.** Почти все отсутствующие метрики можно включить с помощью **YAML и инструкций** из официального репозитория [strimzi/strimzi-kafka-operator](https://github.com/strimzi/strimzi-kafka-operator), каталог `packaging/examples/metrics/`:
+
+| Что нужно | Где взять в репозитории |
+|-----------|-------------------------|
+| JMX-метрики брокеров Kafka (`kafka_server_*`, `jvm_*`, `kafka_log_*`) | [kafka-metrics.yaml](https://github.com/strimzi/strimzi-kafka-operator/blob/main/packaging/examples/metrics/kafka-metrics.yaml) — Kafka CR с `metricsConfig: jmxPrometheusExporter` + ConfigMap `kafka-metrics` |
+| Сбор метрик брокеров в Prometheus | [prometheus-install/pod-monitors/kafka-resources-metrics.yaml](https://github.com/strimzi/strimzi-kafka-operator/blob/main/packaging/examples/metrics/prometheus-install/pod-monitors/kafka-resources-metrics.yaml) |
+| Метрики Cluster Operator (`strimzi_reconciliations_*`, `strimzi_resources`, сертификаты) | [prometheus-install/pod-monitors/cluster-operator-metrics.yaml](https://github.com/strimzi/strimzi-kafka-operator/blob/main/packaging/examples/metrics/prometheus-install/pod-monitors/cluster-operator-metrics.yaml) |
+| Метрики Entity Operator (Topic/User) | [prometheus-install/pod-monitors/entity-operator-metrics.yaml](https://github.com/strimzi/strimzi-kafka-operator/blob/main/packaging/examples/metrics/prometheus-install/pod-monitors/entity-operator-metrics.yaml) |
+| Метрики по CR (Kafka, Topic, User) | [kube-state-metrics/](https://github.com/strimzi/strimzi-kafka-operator/tree/main/packaging/examples/metrics/kube-state-metrics) — configmap.yaml, ksm.yaml |
+| Правила и алерты Prometheus | [prometheus-install/prometheus-rules/](https://github.com/strimzi/strimzi-kafka-operator/tree/main/packaging/examples/metrics/prometheus-install/prometheus-rules), [prometheus-install/alert-manager.yaml](https://github.com/strimzi/strimzi-kafka-operator/blob/main/packaging/examples/metrics/prometheus-install/alert-manager.yaml) |
+
+**Важно:** для kube-prometheus-stack все PodMonitor’ы нужно применять в namespace `monitoring` и добавить label `release: kube-prometheus-stack`, иначе Prometheus их не выберет. Документация Strimzi по метрикам: [strimzi.io — Metrics](https://strimzi.io/docs/operators/latest/deploying.html#assembly-metrics-strimzi).
+
+Если кластер уже развёрнут из **kafka-jbod.yaml** (без JMX), не обязательно заменять его на полный **kafka-metrics.yaml** (там KRaft + NodePools): можно добавить в существующий ресурс `Kafka` блок `spec.kafka.metricsConfig` и отдельно применить ConfigMap `kafka-metrics` (фрагмент из [kafka-metrics.yaml](https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/kafka-metrics.yaml) — секция `kind: ConfigMap`, `name: kafka-metrics`).
 
 ### Почему большинство метрик отсутствуют
 
