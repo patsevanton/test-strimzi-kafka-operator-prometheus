@@ -7,7 +7,7 @@ helm repo add prometheus-community https://prometheus-community.github.io/helm-c
 helm repo update
 ```
 
-3. Установить kube-prometheus-stack с Ingress для Grafana на `grafana.apatsev.org.ru`:
+2. Установить kube-prometheus-stack с Ingress для Grafana на `grafana.apatsev.org.ru`:
 
 ```bash
 helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
@@ -20,14 +20,14 @@ helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheu
   --set grafana.ingress.hosts[0]=grafana.apatsev.org.ru
 ```
 
-4. Получить пароль администратора Grafana:
+3. Получить пароль администратора Grafana:
 
 ```bash
 kubectl get secret -n monitoring kube-prometheus-stack-grafana -o jsonpath="{.data.admin-password}" | base64 -d
 echo
 ```
 
-5. Открыть Grafana: http://grafana.apatsev.org.ru (логин по умолчанию: `admin`).
+4. Открыть Grafana: http://grafana.apatsev.org.ru (логин по умолчанию: `admin`).
 
 ### Strimzi
 
@@ -66,11 +66,10 @@ curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/pa
 
 ### Metrics (examples/metrics)
 
-```bash
-# Включить метрики на Kafka-кластере
-curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/kafka-metrics.yaml | kubectl apply -n myproject -f -
+**Внимание:** полный `kafka-metrics.yaml` содержит KRaft-кластер и **заменяет** kafka-jbod. Поскольку Kafka выше развёрнут из kafka-jbod, для JMX-метрик добавьте в существующий `Kafka` блок `spec.kafka.metricsConfig` и ConfigMap `kafka-metrics` (инструкция — в разделе [Как активировать метрики](#как-активировать-метрики)). Альтернатива: заменить kafka-jbod на kafka-metrics.yaml (KRaft) при первичной установке.
 
-# PodMonitors и правила для Prometheus/VictoriaMetrics (применяем в namespace monitoring)
+```bash
+# PodMonitors для Prometheus/VictoriaMetrics (применяем в namespace monitoring)
 curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/prometheus-install/pod-monitors/cluster-operator-metrics.yaml | kubectl apply -n monitoring -f -
 
 curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/prometheus-install/pod-monitors/entity-operator-metrics.yaml | kubectl apply -n monitoring -f -
@@ -118,9 +117,11 @@ helm upgrade --install prometheus-kafka-exporter \
   --set prometheus.serviceMonitor.additionalLabels.release=kube-prometheus-stack
 ```
 
-Проверка: в Prometheus — target `strimzi-kube-state-metrics` (namespace myproject), метрики `strimzi_kafka_topic_resource_info`, `strimzi_kafka_user_resource_info`, `strimzi_kafka_resource_info`, `strimzi_pod_set_resource_info` и т.д.
+Проверка: в Prometheus — target `prometheus-kafka-exporter` (namespace monitoring), метрики `kafka_topic_partitions`, `kafka_topic_partition_current_offset` и др. Метрики `strimzi_*` (`strimzi_kafka_topic_resource_info`, `strimzi_pod_set_resource_info` и т.д.) — от strimzi-kube-state-metrics (раздел [Metrics](#metrics-examplesmetrics)).
 
-# Импорт Дашборды Grafana — импорт JSON из examples/metrics/grafana-dashboards/ через UI Grafana:
+## Импорт дашбордов Grafana
+
+Импорт JSON из `examples/metrics/grafana-dashboards/` через UI Grafana:
 
 https://github.com/strimzi/strimzi-kafka-operator/blob/main/packaging/examples/metrics/grafana-dashboards/strimzi-kafka-exporter.json
 
@@ -337,21 +338,21 @@ Karapace поднимается как обычный HTTP-сервис и хр�
 - `strimzi/kafka-user-schema-registry.yaml` — KafkaUser для Schema Registry с ACL для топика `_schemas`
 - `schema-registry.yaml` — Service/Deployment для Karapace (`ghcr.io/aiven-open/karapace:5.0.3`). **Настроен на SASL/SCRAM-SHA-512 аутентификацию.**
 
-Если Kafka развёрнут в namespace `myproject` с именем кластера `my-cluster`, в манифестах `strimzi/` замените `namespace: kafka-cluster` и `strimzi.io/cluster: kafka-cluster` на `myproject` и `my-cluster`; в `schema-registry.yaml` задайте `KARAPACE_BOOTSTRAP_URI`: `my-cluster-kafka-bootstrap.myproject.svc.cluster.local:9092`.
+Файлы `strimzi/` в репозитории по умолчанию содержат `namespace: kafka-cluster` и `strimzi.io/cluster: kafka-cluster`. Если Kafka развёрнут в namespace `myproject` с именем кластера `my-cluster` (как в разделе [Установка Kafka из examples](#установка-kafka-из-examples)), замените в манифестах на `myproject` и `my-cluster`; в `schema-registry.yaml` задайте `KARAPACE_BOOTSTRAP_URI`: `my-cluster-kafka-bootstrap.myproject.svc.cluster.local:9092`. В командах ниже используется `myproject` (подставьте свой namespace, если иной).
 
 ```bash
 kubectl create namespace schema-registry --dry-run=client -o yaml | kubectl apply -f -
 
 # Создать топик для схем
 kubectl apply -f strimzi/kafka-topic-schemas.yaml
-kubectl wait kafkatopic/schemas-topic -n kafka-cluster --for=condition=Ready --timeout=120s
+kubectl wait kafkatopic/schemas-topic -n myproject --for=condition=Ready --timeout=120s
 
 # Создать пользователя для Schema Registry (обязательно для SASL аутентификации)
 kubectl apply -f strimzi/kafka-user-schema-registry.yaml
-kubectl wait kafkauser/schema-registry -n kafka-cluster --for=condition=Ready --timeout=120s
+kubectl wait kafkauser/schema-registry -n myproject --for=condition=Ready --timeout=120s
 
-# Скопировать секрет в namespace schema-registry (Strimzi создаёт секрет в kafka-cluster)
-kubectl get secret schema-registry -n kafka-cluster -o json | \
+# Скопировать секрет в namespace schema-registry (Strimzi создаёт секрет в namespace Kafka)
+kubectl get secret schema-registry -n myproject -o json | \
   jq 'del(.metadata.namespace,.metadata.resourceVersion,.metadata.uid,.metadata.creationTimestamp,.metadata.ownerReferences)' | \
   kubectl apply -n schema-registry -f -
 
@@ -406,20 +407,20 @@ helm upgrade --install kafka-producer ./helm/kafka-producer \
 |------------|----------|----------------------|
 | `MODE` | Режим работы: `producer` или `consumer` | `producer` |
 | `KAFKA_BROKERS` | Список брокеров Kafka (через запятую) | `localhost:9092` |
-| `KAFKA_TOPIC` | Название топика | `test-topic` |
+| `KAFKA_TOPIC` | Название топика | `my-topic` (как в [Strimzi examples](https://github.com/strimzi/strimzi-kafka-operator/blob/main/packaging/examples/topic/kafka-topic.yaml)) |
 | `SCHEMA_REGISTRY_URL` | URL Schema Registry | `http://localhost:8081` |
 | `KAFKA_USERNAME` | Имя пользователя для SASL/SCRAM | - |
 | `KAFKA_PASSWORD` | Пароль для SASL/SCRAM | - |
-| `KAFKA_GROUP_ID` | Consumer Group ID (только для consumer) | `test-group` |
+| `KAFKA_GROUP_ID` | Consumer Group ID (только для consumer) | `my-group` (как в [Strimzi kafka-user](https://github.com/strimzi/strimzi-kafka-operator/blob/main/packaging/examples/user/kafka-user.yaml)) |
 | `HEALTH_PORT` | Порт для health-проверок (liveness/readiness) | `8080` |
 
 ### Запуск Producer/Consumer в кластере используя Helm
 
 Для запуска приложений в кластере используйте Helm charts из директории `helm`.
 
-**Важно**: Перед запуском убедитесь, что KafkaUser `myuser` создан и готов (см. раздел "Создание Kafka пользователей").
+**Важно**: Перед запуском убедитесь, что KafkaUser создан и готов (см. раздел [Установка Kafka из examples](#установка-kafka-из-examples), где применяется `kafka-user.yaml`). Имена приведены к [примерам Strimzi](https://github.com/strimzi/strimzi-kafka-operator/tree/main/packaging/examples): `my-user`, `my-topic`, `my-group`.
 
-Также важно: **Strimzi создаёт secret `myuser` в namespace `kafka-cluster`**, а Kubernetes secrets **не доступны между namespace**.
+Также важно: **Strimzi создаёт secret в namespace Kafka** (например, `myproject` при установке из examples), а Kubernetes secrets **не доступны между namespace**.
 Если вы запускаете приложения в отдельных namespace, сначала скопируйте secret в каждый namespace приложения:
 
 ```bash
@@ -427,13 +428,12 @@ helm upgrade --install kafka-producer ./helm/kafka-producer \
 kubectl create namespace myproject --dry-run=client -o yaml | kubectl apply -f -
 kubectl create namespace kafka-consumer --dry-run=client -o yaml | kubectl apply -f -
 
-# Скопировать secret myuser из kafka-cluster → myproject
-kubectl get secret myuser -n kafka-cluster -o json | \
+# Скопировать secret my-user из namespace Kafka (myproject) → myproject и kafka-consumer
+kubectl get secret my-user -n myproject -o json | \
   jq 'del(.metadata.namespace,.metadata.resourceVersion,.metadata.uid,.metadata.creationTimestamp,.metadata.ownerReferences)' | \
   kubectl apply -n myproject -f -
 
-# Скопировать secret myuser из kafka-cluster → kafka-consumer
-kubectl get secret myuser -n kafka-cluster -o json | \
+kubectl get secret my-user -n myproject -o json | \
   jq 'del(.metadata.namespace,.metadata.resourceVersion,.metadata.uid,.metadata.creationTimestamp,.metadata.ownerReferences)' | \
   kubectl apply -n kafka-consumer -f -
 ```
@@ -443,9 +443,10 @@ kubectl get secret myuser -n kafka-cluster -o json | \
 helm upgrade --install kafka-producer ./helm/kafka-producer \
   --namespace myproject \
   --create-namespace \
-  --set kafka.brokers="kafka-cluster-kafka-bootstrap.kafka-cluster:9092" \
+  --set kafka.brokers="my-cluster-kafka-bootstrap.myproject.svc.cluster.local:9092" \
   --set schemaRegistry.url="http://schema-registry.schema-registry:8081" \
-  --set secrets.name="myuser"
+  --set kafka.topic="my-topic" \
+  --set secrets.name="my-user"
 ```
 
 #### 2) Установить Consumer (с аутентификацией через Strimzi Secret)
@@ -453,23 +454,25 @@ helm upgrade --install kafka-producer ./helm/kafka-producer \
 helm upgrade --install kafka-consumer ./helm/kafka-consumer \
   --namespace kafka-consumer \
   --create-namespace \
-  --set kafka.brokers="kafka-cluster-kafka-bootstrap.kafka-cluster:9092" \
+  --set kafka.brokers="my-cluster-kafka-bootstrap.myproject.svc.cluster.local:9092" \
   --set schemaRegistry.url="http://schema-registry.schema-registry:8081" \
-  --set secrets.name="myuser"
+  --set kafka.topic="my-topic" \
+  --set kafka.groupId="my-group" \
+  --set secrets.name="my-user"
 ```
 
-Helm charts автоматически берут `username` и `password` из указанного секрета (`myuser`), который был создан Strimzi при создании KafkaUser.
+Helm charts автоматически берут `username` и `password` из указанного секрета (`my-user`), который был создан Strimzi при создании KafkaUser.
 
 #### Альтернатива: передать credentials напрямую (не рекомендуется для production)
 ```bash
 # Получить пароль из секрета Strimzi
-KAFKA_PASSWORD=$(kubectl get secret myuser -n kafka-cluster -o jsonpath='{.data.password}' | base64 -d)
+KAFKA_PASSWORD=$(kubectl get secret my-user -n myproject -o jsonpath='{.data.password}' | base64 -d)
 
 helm upgrade --install kafka-producer ./helm/kafka-producer \
   --namespace myproject \
   --create-namespace \
-  --set kafka.brokers="kafka-cluster-kafka-bootstrap.kafka-cluster:9092" \
-  --set kafka.username="myuser" \
+  --set kafka.brokers="my-cluster-kafka-bootstrap.myproject.svc.cluster.local:9092" \
+  --set kafka.username="my-user" \
   --set kafka.password="$KAFKA_PASSWORD" \
   --set schemaRegistry.url="http://schema-registry.schema-registry:8081"
 ```

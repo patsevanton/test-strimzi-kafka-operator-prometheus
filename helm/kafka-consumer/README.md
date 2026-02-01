@@ -32,7 +32,7 @@ helm install kafka-consumer ./helm/kafka-consumer \
 ```yaml
 secrets:
   create: true
-  username: "myuser"
+  username: "my-user"
   password: "mypassword"
 ```
 
@@ -53,10 +53,10 @@ image:
   tag: "latest"
 
 kafka:
-  brokers: "kafka-cluster-kafka-bootstrap.kafka-cluster:9092"
-  topic: "test-topic"
-  groupId: "my-consumer-group"
-  username: "myuser"
+  brokers: "my-cluster-kafka-bootstrap.myproject.svc.cluster.local:9092"
+  topic: "my-topic"
+  groupId: "my-group"
+  username: "my-user"
   password: "mypassword"
 
 schemaRegistry:
@@ -64,7 +64,7 @@ schemaRegistry:
 
 secrets:
   create: true
-  username: "myuser"
+  username: "my-user"
   password: "mypassword"
 ```
 

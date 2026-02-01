@@ -51,8 +51,8 @@ autoscaling:
 # Конфигурация Kafka
 kafka:
   # Сервис Strimzi bootstrap (работает между namespace через DNS)
-  brokers: "kafka-cluster-kafka-bootstrap.kafka-cluster:9092"
-  topic: "test-topic"
+  brokers: "my-cluster-kafka-bootstrap.myproject.svc.cluster.local:9092"
+  topic: "my-topic"
   username: ""
   password: ""
 
@@ -66,7 +66,7 @@ secrets:
   # Если true, создать secret для учётных данных Kafka
   create: false
   # Имя secret (если не используется по умолчанию)
-  # Для Strimzi: используйте имя KafkaUser (например, "myuser")
+  # Для Strimzi: используйте имя KafkaUser (например, "my-user" из packaging/examples/user)
   name: ""
   # Если true, использовать формат secret от Strimzi KafkaUser (username = имя secret, только ключ password)
   strimzi: true
