@@ -56,23 +56,37 @@ cd strimzi-kafka-operator/packaging/examples/
 
 ```bash
 # Kafka-кластер (JBOD)
-kubectl apply -f kafka/kafka-jbod.yaml
+curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/kafka/kafka-jbod.yaml | kubectl apply -f -
 
-# Топик (опционально)
-kubectl apply -f topic/kafka-topic.yaml
+# Топик
+curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/topic/kafka-topic.yaml | kubectl apply -f -
 
-# Пользователь Kafka (опционально)
-kubectl apply -f user/kafka-user.yaml
+# Пользователь Kafka
+curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/user/kafka-user.yaml | kubectl apply -f -
 ```
 
 ### Metrics (examples/metrics)
 
 ```bash
 # Включить метрики на Kafka-кластере
-kubectl apply -f metrics/kafka-metrics.yaml
+curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/kafka-metrics.yaml | kubectl apply -f -
 
 # PodMonitors и правила для Prometheus/VictoriaMetrics (namespace monitoring)
-kubectl apply -f metrics/prometheus-install/pod-monitors/
+curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/prometheus-install/pod-monitors/cluster-operator-metrics.yaml | kubectl apply -f -
+
+curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/prometheus-install/pod-monitors/entity-operator-metrics.yaml | kubectl apply -f -
+
+curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/prometheus-install/pod-monitors/kafka-resources-metrics.yaml | kubectl apply -f -
 ```
+
+```bash
+# 1. ConfigMap с конфигом метрик по CRD Strimzi
+curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/kube-state-metrics/configmap.yaml | kubectl apply -f -
+
+# 2. Deployment, Service, RBAC и ServiceMonitor
+curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/kube-state-metrics/ksm.yaml | kubectl apply -f -
+```
+
+Проверка: в Prometheus должен появиться target для `strimzi-kube-state-metrics` в namespace `monitoring`, метрики с префиксами `strimzi_kafka_topic_*`, `strimzi_kafka_user_*`, `strimzi_kafka_*` и т.д.
 
 # Импорт Дашборды Grafana — импорт JSON из examples/metrics/grafana-dashboards/ через UI Grafana

@@ -1,0 +1,11 @@
+.cursorignore
+.git
+.gitignore
+.terraform
+.terraform.lock.hcl
+LICENSE
+ip-dns.tf
+k8s.tf
+net.tf
+terraform.tfstate
+versions.tf
