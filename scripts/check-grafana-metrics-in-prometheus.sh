@@ -1,16 +1,39 @@
 #!/bin/bash
 # Проверка наличия метрик из JSON-дашбордов Grafana Strimzi в Prometheus
 # Использование:
-#   # Из пода в кластере (или с port-forward):
-#   kubectl exec -it deploy/kube-prometheus-stack-prometheus -n monitoring -- sh -c 'apk add curl 2>/dev/null; ./check-grafana-metrics-in-prometheus.sh'
-#   # С port-forward (в отдельном терминале: kubectl port-forward -n monitoring svc/kube-prometheus-stack-prometheus 9090:9090):
-#   PROM_URL=http://localhost:9090/api/v1/query ./check-grafana-metrics-in-prometheus.sh
+#   ./scripts/check-grafana-metrics-in-prometheus.sh
+#     — при PROM_URL по умолчанию (localhost:9090) скрипт сам поднимает kubectl port-forward.
+#   PROM_URL=http://other:9090 ./scripts/check-grafana-metrics-in-prometheus.sh
+#     — без port-forward (уже есть туннель или запрос в кластер).
+#   SKIP_PORT_FORWARD=1 ./scripts/check-grafana-metrics-in-prometheus.sh
+#     — не запускать port-forward даже для localhost.
+# Опционально: KUBE_NS=monitoring PROM_SVC=kube-prometheus-stack-prometheus
 
 set -e
 
 PROM_URL="${PROM_URL:-http://localhost:9090/api/v1/query}"
 if [[ "$PROM_URL" != */api/v1/query ]]; then
   PROM_URL="${PROM_URL%/}/api/v1/query"
+fi
+
+# Автоматический port-forward к Prometheus, если URL — localhost:9090
+PF_PID=""
+if [[ "$PROM_URL" == http://localhost:9090* ]] && [[ -z "${SKIP_PORT_FORWARD:-}" ]]; then
+  KUBE_NS="${KUBE_NS:-monitoring}"
+  PROM_SVC="${PROM_SVC:-kube-prometheus-stack-prometheus}"
+  if command -v kubectl >/dev/null 2>&1; then
+    echo "Запуск: kubectl port-forward -n $KUBE_NS svc/$PROM_SVC 9090:9090"
+    kubectl port-forward -n "$KUBE_NS" "svc/$PROM_SVC" 9090:9090 &
+    PF_PID=$!
+    trap 'kill $PF_PID 2>/dev/null; wait $PF_PID 2>/dev/null' EXIT
+    # Ждём, пока порт станет доступен
+    for i in 1 2 3 4 5 6 7 8 9 10; do
+      if curl -s -o /dev/null -w "%{http_code}" "http://localhost:9090/-/healthy" 2>/dev/null | grep -q 200; then
+        break
+      fi
+      sleep 1
+    done
+  fi
 fi
 
 # Метрики из strimzi-kafka-exporter.json
@@ -120,30 +143,34 @@ print_section() {
   local title="$1"
   shift
   local metrics=("$@")
-  echo ""
-  echo "=== $title ==="
-  local has=0 no=0
+  local missing=()
   for m in "${metrics[@]}"; do
     status=$(check_metric "$m")
-    printf "  %-55s %s\n" "$m" "$status"
     case "$status" in
-      есть) ((has++)) ;;
-      нет)  ((no++)) ;;
+      есть) ;;
+      *) missing+=("$m|$status") ;;
     esac
   done
-  echo "  ---"
-  echo "  Итого: есть=$has, нет=$no"
+  echo ""
+  echo "=== $title ==="
+  if [[ ${#missing[@]} -eq 0 ]]; then
+    echo "  (все метрики есть)"
+  else
+    for line in "${missing[@]}"; do
+      printf "  %-55s %s\n" "${line%%|*}" "${line#*|}"
+    done
+    echo "  ---"
+    echo "  Отсутствует: ${#missing[@]}"
+  fi
 }
 
 echo "Проверка метрик Grafana дашбордов Strimzi в Prometheus"
-echo "URL: $PROM_URL"
+echo "Вывод: только отсутствующие метрики. URL: $PROM_URL"
 echo ""
 
 print_section "Kafka Exporter (strimzi-kafka-exporter.json)" "${KAFKA_EXPORTER_METRICS[@]}"
 print_section "Strimzi Kafka (strimzi-kafka.json)" "${STRIMZI_KAFKA_METRICS[@]}"
 print_section "Strimzi KRaft (strimzi-kraft.json)" "${STRIMZI_KRAFT_METRICS[@]}"
-
-# Strimzi Operators
 print_section "Strimzi Operators (strimzi-operators.json)" "${STRIMZI_OPERATORS_METRICS[@]}"
 
 echo ""
