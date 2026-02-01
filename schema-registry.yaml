@@ -35,7 +35,7 @@ metadata:
   labels:
     app: schema-registry
 spec:
-  replicas: 2
+  replicas: 1
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -110,6 +110,8 @@ spec:
               value: "schema-registry"
             - name: KARAPACE_TOPIC_NAME
               value: "_schemas"
+            - name: KARAPACE_MASTER_ELIGIBILITY
+              value: "true"
           readinessProbe:
             httpGet:
               path: /subjects

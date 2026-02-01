@@ -64,6 +64,22 @@ curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/pa
 curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/user/kafka-user.yaml | kubectl apply -n myproject -f -
 ```
 
+**Ожидание готовности Kafka** (кластер поднимается несколько минут):
+
+```bash
+kubectl wait kafka/my-cluster -n myproject --for=condition=Ready --timeout=600s
+```
+
+**Аутентификация SCRAM (для Schema Registry и Producer/Consumer):** Kafka из examples (kafka-jbod) по умолчанию без аутентификации. Для SASL/SCRAM включите её на listener и замените пользователя на SCRAM-вариант без ACL (кластер из examples не поддерживает authorization/ACL):
+
+```bash
+kubectl patch kafka my-cluster -n myproject --type=json -p='[{"op": "add", "path": "/spec/kafka/listeners/0/authentication", "value": {"type": "scram-sha-512"}}]'
+kubectl wait kafka/my-cluster -n myproject --for=condition=Ready --timeout=600s
+# Пользователь my-user из examples (TLS+ACL) не будет Ready без authorizer — примените SCRAM-вариант без ACL:
+kubectl apply -f strimzi/kafka-user-my-user-scram.yaml
+kubectl wait kafkauser/my-user -n myproject --for=condition=Ready --timeout=120s
+```
+
 ### Metrics (examples/metrics)
 
 **Внимание:** полный `kafka-metrics.yaml` содержит KRaft-кластер и **заменяет** kafka-jbod. Поскольку Kafka выше развёрнут из kafka-jbod, для JMX-метрик добавьте в существующий `Kafka` блок `spec.kafka.metricsConfig` и ConfigMap `kafka-metrics` (инструкция — в разделе [Как активировать метрики](#как-активировать-метрики)). Альтернатива: заменить kafka-jbod на kafka-metrics.yaml (KRaft) при первичной установке.
@@ -104,18 +120,29 @@ kubectl label svc -n myproject strimzi-kube-state-metrics app.kubernetes.io/name
 
 **Установка (Helm, Prometheus Operator)**
 
-Репозиторий уже добавлен для kube-prometheus-stack:
+Репозиторий уже добавлен для kube-prometheus-stack. Если на Kafka включён SCRAM (см. раздел [Установка Kafka из examples](#установка-kafka-из-examples)), создайте secret с учётными данными и установите экспортер с SASL:
 
 ```bash
-# Установить Kafka Exporter (адрес брокеров — для Strimzi в myproject: my-cluster-kafka-bootstrap:9092)
+# Secret для SASL (username/password — например из KafkaUser my-user)
+kubectl create secret generic kafka-exporter-sasl -n monitoring \
+  --from-literal=username=my-user \
+  --from-literal=password="$(kubectl get secret my-user -n myproject -o jsonpath='{.data.password}' | base64 -d)"
+
+# Установить Kafka Exporter с SASL SCRAM-SHA-512
 helm upgrade --install prometheus-kafka-exporter \
   prometheus-community/prometheus-kafka-exporter \
   --namespace monitoring \
   --create-namespace \
   --set kafkaServer[0]=my-cluster-kafka-bootstrap.myproject.svc.cluster.local:9092 \
   --set prometheus.serviceMonitor.enabled=true \
-  --set prometheus.serviceMonitor.additionalLabels.release=kube-prometheus-stack
+  --set prometheus.serviceMonitor.additionalLabels.release=kube-prometheus-stack \
+  --set sasl.enabled=true \
+  --set sasl.scram.enabled=true \
+  --set sasl.scram.mechanism=scram-sha512 \
+  --set sasl.scram.secretName=kafka-exporter-sasl
 ```
+
+Без SCRAM на Kafka можно опустить последние четыре `--set` и не создавать secret.
 
 Проверка: в Prometheus — target `prometheus-kafka-exporter` (namespace monitoring), метрики `kafka_topic_partitions`, `kafka_topic_partition_current_offset` и др. Метрики `strimzi_*` (`strimzi_kafka_topic_resource_info`, `strimzi_pod_set_resource_info` и т.д.) — от strimzi-kube-state-metrics (раздел [Metrics](#metrics-examplesmetrics)).
 
@@ -335,10 +362,10 @@ Go-приложение из этого репозитория использу�
 Karapace поднимается как обычный HTTP-сервис и хранит схемы в Kafka-топике `_schemas` (как и Confluent SR).
 
 - `strimzi/kafka-topic-schemas.yaml` — KafkaTopic для `_schemas` (важно при `min.insync.replicas: 2`)
-- `strimzi/kafka-user-schema-registry.yaml` — KafkaUser для Schema Registry с ACL для топика `_schemas`
-- `schema-registry.yaml` — Service/Deployment для Karapace (`ghcr.io/aiven-open/karapace:5.0.3`). **Настроен на SASL/SCRAM-SHA-512 аутентификацию.**
+- `strimzi/kafka-user-schema-registry.yaml` — KafkaUser для Schema Registry (SCRAM, без ACL — кластер из examples не поддерживает authorization)
+- `schema-registry.yaml` — Service/Deployment для Karapace (`ghcr.io/aiven-open/karapace:5.0.3`). Настроен на SASL/SCRAM-SHA-512. Для одной реплики задан `KARAPACE_MASTER_ELIGIBILITY=true` (иначе возможна ошибка «No master set» при регистрации схем).
 
-Файлы `strimzi/` в репозитории по умолчанию содержат `namespace: kafka-cluster` и `strimzi.io/cluster: kafka-cluster`. Если Kafka развёрнут в namespace `myproject` с именем кластера `my-cluster` (как в разделе [Установка Kafka из examples](#установка-kafka-из-examples)), замените в манифестах на `myproject` и `my-cluster`; в `schema-registry.yaml` задайте `KARAPACE_BOOTSTRAP_URI`: `my-cluster-kafka-bootstrap.myproject.svc.cluster.local:9092`. В командах ниже используется `myproject` (подставьте свой namespace, если иной).
+Файлы `strimzi/` в репозитории используют `namespace: myproject` и `strimzi.io/cluster: my-cluster`. В `schema-registry.yaml` задан `KARAPACE_BOOTSTRAP_URI`: `my-cluster-kafka-bootstrap.myproject.svc.cluster.local:9092`. Подставьте свой namespace/кластер, если иные.
 
 ```bash
 kubectl create namespace schema-registry --dry-run=client -o yaml | kubectl apply -f -
@@ -359,6 +386,8 @@ kubectl get secret schema-registry -n myproject -o json | \
 # Развернуть Schema Registry
 kubectl apply -f schema-registry.yaml
 kubectl rollout status deploy/schema-registry -n schema-registry --timeout=5m
+# Подождать выбор master в Karapace (иначе Producer может получить 50003 "forwarding to the master")
+sleep 60
 kubectl get svc -n schema-registry schema-registry
 ```
 
@@ -461,7 +490,7 @@ helm upgrade --install kafka-consumer ./helm/kafka-consumer \
   --set secrets.name="my-user"
 ```
 
-Helm charts автоматически берут `username` и `password` из указанного секрета (`my-user`), который был создан Strimzi при создании KafkaUser.
+Helm charts автоматически берут имя пользователя (имя секрета) и пароль из ключа `password` указанного секрета (`my-user`), созданного Strimzi для KafkaUser.
 
 #### Альтернатива: передать credentials напрямую (не рекомендуется для production)
 ```bash
