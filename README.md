@@ -297,6 +297,8 @@ Karapace поднимается как обычный HTTP-сервис и хр�
 - `strimzi/kafka-user-schema-registry.yaml` — KafkaUser для Schema Registry с ACL для топика `_schemas`
 - `schema-registry.yaml` — Service/Deployment для Karapace (`ghcr.io/aiven-open/karapace:5.0.3`). **Настроен на SASL/SCRAM-SHA-512 аутентификацию.**
 
+Если Kafka развёрнут в namespace `myproject` с именем кластера `my-cluster`, в манифестах `strimzi/` замените `namespace: kafka-cluster` и `strimzi.io/cluster: kafka-cluster` на `myproject` и `my-cluster`; в `schema-registry.yaml` задайте `KARAPACE_BOOTSTRAP_URI`: `my-cluster-kafka-bootstrap.myproject.svc.cluster.local:9092`.
+
 ```bash
 kubectl create namespace schema-registry --dry-run=client -o yaml | kubectl apply -f -
 
@@ -321,7 +323,7 @@ kubectl get svc -n schema-registry schema-registry
 
 ## Producer App и Consumer App
 
-**Producer App и Consumer App** — Go приложение для работы с Apache Kafka через Strimzi. Приложение может работать в режиме producer (отправка сообщений) или consumer (получение сообщений) в зависимости от переменной окружения `MODE`. Используется для генерации нагрузки на кластер Kafka во время тестирования.
+**Producer App и Consumer App** — Go приложение для работы с Apache Kafka через Strimzi. Приложение может работать в режиме producer (отправка сообщений) или consumer (получение сообщений) в зависимости от переменной окружения `MODE`. Сообщения сериализуются в **Avro** с использованием **Schema Registry (Karapace)** — совместимого с Confluent API. Перед запуском Producer/Consumer необходимо развернуть Schema Registry (см. раздел «Schema Registry (Karapace) для Avro») и передать `schemaRegistry.url` в Helm.
 
 ### Используемые библиотеки
 
@@ -402,7 +404,7 @@ helm upgrade --install kafka-producer ./helm/kafka-producer \
   --namespace myproject \
   --create-namespace \
   --set kafka.brokers="kafka-cluster-kafka-bootstrap.kafka-cluster:9092" \
-  --set schemaRegistry.url="http://schema-registry.schema-registry.svc:8081" \
+  --set schemaRegistry.url="http://schema-registry.schema-registry:8081" \
   --set secrets.name="myuser"
 ```
 
@@ -412,7 +414,7 @@ helm upgrade --install kafka-consumer ./helm/kafka-consumer \
   --namespace kafka-consumer \
   --create-namespace \
   --set kafka.brokers="kafka-cluster-kafka-bootstrap.kafka-cluster:9092" \
-  --set schemaRegistry.url="http://schema-registry.schema-registry.svc:8081" \
+  --set schemaRegistry.url="http://schema-registry.schema-registry:8081" \
   --set secrets.name="myuser"
 ```
 
@@ -429,7 +431,7 @@ helm upgrade --install kafka-producer ./helm/kafka-producer \
   --set kafka.brokers="kafka-cluster-kafka-bootstrap.kafka-cluster:9092" \
   --set kafka.username="myuser" \
   --set kafka.password="$KAFKA_PASSWORD" \
-  --set schemaRegistry.url="http://schema-registry.schema-registry.svc:8081"
+  --set schemaRegistry.url="http://schema-registry.schema-registry:8081"
 ```
 
 #### 3) Проверка логов
