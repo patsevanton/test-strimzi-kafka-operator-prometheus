@@ -2,9 +2,9 @@ apiVersion: kafka.strimzi.io/v1
 kind: KafkaUser
 metadata:
   name: schema-registry
-  namespace: kafka-cluster
+  namespace: myproject
   labels:
-    strimzi.io/cluster: kafka-cluster
+    strimzi.io/cluster: my-cluster
 spec:
   authentication:
     type: scram-sha-512

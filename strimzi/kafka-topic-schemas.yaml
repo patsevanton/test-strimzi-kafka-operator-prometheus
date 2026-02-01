@@ -2,9 +2,9 @@ apiVersion: kafka.strimzi.io/v1
 kind: KafkaTopic
 metadata:
   name: schemas-topic
-  namespace: kafka-cluster
+  namespace: myproject
   labels:
-    strimzi.io/cluster: kafka-cluster
+    strimzi.io/cluster: my-cluster
 spec:
   topicName: _schemas
   partitions: 1

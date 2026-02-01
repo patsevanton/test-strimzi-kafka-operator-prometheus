@@ -88,7 +88,7 @@ spec:
                 fieldRef:
                   fieldPath: status.podIP
             - name: KARAPACE_BOOTSTRAP_URI
-              value: kafka-cluster-kafka-bootstrap.kafka-cluster:9092
+              value: my-cluster-kafka-bootstrap.myproject.svc.cluster.local:9092
             - name: KARAPACE_SECURITY_PROTOCOL
               value: "SASL_PLAINTEXT"
             - name: KARAPACE_SASL_MECHANISM
