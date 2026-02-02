@@ -123,10 +123,11 @@ kubectl label svc -n myproject strimzi-kube-state-metrics app.kubernetes.io/name
 Репозиторий уже добавлен для kube-prometheus-stack. Если на Kafka включён SCRAM (см. раздел [Установка Kafka из examples](#установка-kafka-из-examples)), создайте secret с учётными данными и установите экспортер с SASL:
 
 ```bash
-# Secret для SASL (username/password — например из KafkaUser my-user)
+# Secret для SASL (username/password — например из KafkaUser my-user). Idempotent: при повторном запуске не ошибка.
 kubectl create secret generic kafka-exporter-sasl -n monitoring \
   --from-literal=username=my-user \
-  --from-literal=password="$(kubectl get secret my-user -n myproject -o jsonpath='{.data.password}' | base64 -d)"
+  --from-literal=password="$(kubectl get secret my-user -n myproject -o jsonpath='{.data.password}' | base64 -d)" \
+  --dry-run=client -o yaml | kubectl apply -n monitoring -f -
 
 # Установить Kafka Exporter с SASL SCRAM-SHA-512
 helm upgrade --install prometheus-kafka-exporter \
