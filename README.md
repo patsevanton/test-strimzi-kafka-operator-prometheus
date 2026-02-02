@@ -188,6 +188,8 @@ done
 
 ### Метрики из JSON-дашбордов Grafana (Strimzi)
 
+**Почему дашборды Strimzi Kafka и Strimzi KRaft показывают «no data»?** Они строятся по JMX-метрикам брокеров Kafka (`kafka_server_*`, `jvm_*`, `kafka_server_raftmetrics_*` и т.д.). Кластер из **kafka-persistent.yaml** по умолчанию не включает JMX Exporter — метрик нет, дашборды пустые. Чтобы появились данные: включите JMX-метрики по разделу [Как активировать метрики](#как-активировать-метрики) (блок «Команды для JMX-метрик брокеров»).
+
 Список метрик Prometheus, используемых в дашбордах (сверено с JSON из `packaging/examples/metrics/grafana-dashboards/`). Статус проверки в Prometheus:
 
 ### Kafka Exporter (strimzi-kafka-exporter.json)
