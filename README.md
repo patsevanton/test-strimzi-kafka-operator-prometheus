@@ -537,7 +537,14 @@ helm upgrade --install kafka-producer ./helm/kafka-producer \
   --set schemaRegistry.url="http://schema-registry.schema-registry:8081"
 ```
 
-#### 3) Проверка логов
+#### 3) Дождаться готовности подов Producer/Consumer
+```bash
+kubectl rollout status deploy/kafka-producer -n myproject --timeout=120s
+kubectl rollout status deploy/kafka-consumer -n kafka-consumer --timeout=120s
+# Либо следить за подами: kubectl get pods -n myproject; kubectl get pods -n kafka-consumer -w
+```
+
+#### 4) Проверка логов
 ```bash
 # Producer logs
 kubectl logs -n myproject -l app.kubernetes.io/name=kafka-producer -f
