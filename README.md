@@ -311,8 +311,9 @@ kubectl patch kafka my-cluster -n myproject --type=json -p='[{"op": "add", "path
 curl -sL https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/prometheus-install/pod-monitors/kafka-resources-metrics.yaml | kubectl apply -n monitoring -f -
 kubectl label podmonitor -n monitoring kafka-resources-metrics release=kube-prometheus-stack --overwrite
 
-# 4. Дождаться перезапуска брокеров (Strimzi добавит JMX Exporter sidecar). KRaft: StatefulSet брокеров — my-cluster-broker
-kubectl rollout status statefulset/my-cluster-broker -n myproject --timeout=600s
+# 4. Дождаться перезапуска брокеров (Strimzi добавит JMX в под и откроет порт 9404). В KRaft брокеры управляются StrimziPodSet, не StatefulSet — просто подождите 2–5 минут и проверьте, что у подов есть порт tcp-prometheus (9404) и метрики доступны
+kubectl get pods -n myproject -l strimzi.io/name=my-cluster-kafka -o wide
+# Проверка JMX из пода: kubectl exec -n myproject my-cluster-broker-0 -- wget -qO- http://localhost:9404/metrics | head -5
 ```
 
 #### Команды для метрик Cluster Operator (Strimzi Operators)
