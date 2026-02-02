@@ -90,16 +90,7 @@ spec:
             - name: KARAPACE_BOOTSTRAP_URI
               value: my-cluster-kafka-bootstrap.myproject.svc.cluster.local:9092
             - name: KARAPACE_SECURITY_PROTOCOL
-              value: "SASL_PLAINTEXT"
-            - name: KARAPACE_SASL_MECHANISM
-              value: "SCRAM-SHA-512"
-            - name: KARAPACE_SASL_PLAIN_USERNAME
-              value: "schema-registry"
-            - name: KARAPACE_SASL_PLAIN_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: schema-registry
-                  key: password
+              value: "PLAINTEXT"
             - name: POD_NAME
               valueFrom:
                 fieldRef:
