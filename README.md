@@ -7,7 +7,7 @@ helm repo add prometheus-community https://prometheus-community.github.io/helm-c
 helm repo update
 ```
 
-2. Установить kube-prometheus-stack с Ingress для Grafana на `grafana.apatsev.org.ru`:
+2. Установить kube-prometheus-stack с Ingress для Grafana на `grafana.apatsev.org.ru` (при первом запуске установка может занять несколько минут из-за `--wait`):
 
 ```bash
 helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
@@ -17,7 +17,8 @@ helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheu
   --wait \
   --set grafana.ingress.enabled=true \
   --set grafana.ingress.ingressClassName=nginx \
-  --set grafana.ingress.hosts[0]=grafana.apatsev.org.ru
+  --set grafana.ingress.hosts[0]=grafana.apatsev.org.ru \
+  --timeout 10m
 ```
 
 3. Получить пароль администратора Grafana:
@@ -485,4 +486,29 @@ kubectl logs -n myproject -l app.kubernetes.io/name=kafka-producer -f
 
 # Consumer logs
 kubectl logs -n kafka-consumer -l app.kubernetes.io/name=kafka-consumer -f
+```
+
+### Проверка подов и логов после установки
+
+Убедитесь, что все поды в статусе **Running**:
+
+```bash
+kubectl get pods -n monitoring
+kubectl get pods -n strimzi
+kubectl get pods -n myproject
+kubectl get pods -n kafka-consumer
+kubectl get pods -n schema-registry
+```
+
+При необходимости проверьте логи на ошибки (ищите строки с `ERROR`, `error`, `Fatal`):
+
+```bash
+# Producer и Consumer
+kubectl logs -n myproject -l app.kubernetes.io/name=kafka-producer --tail=50
+kubectl logs -n kafka-consumer -l app.kubernetes.io/name=kafka-consumer --tail=50
+
+# Schema Registry, Strimzi operator, Kafka Exporter
+kubectl logs -n schema-registry deploy/schema-registry --tail=30
+kubectl logs -n strimzi deploy/strimzi-cluster-operator --tail=30
+kubectl logs -n monitoring -l app=prometheus-kafka-exporter --tail=20
 ```
