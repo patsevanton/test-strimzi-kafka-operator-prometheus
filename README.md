@@ -166,20 +166,27 @@ https://github.com/strimzi/strimzi-kafka-operator/blob/main/packaging/examples/m
 **Скрипт проверки всех метрик** из JSON-дашбордов Grafana (извлечены из `packaging/examples/metrics/grafana-dashboards/`):
 
 ```bash
-# Вариант 1: port-forward в отдельном терминале, затем:
+# Вариант 1: скрипт сам поднимет port-forward к Prometheus (по умолчанию):
+./scripts/check-grafana-metrics-in-prometheus.sh
+```
+
+Либо вручную: port-forward в одном терминале, в другом — скрипт с `SKIP_PORT_FORWARD=1` (иначе скрипт попытается поднять второй port-forward и будет конфликт портов):
+
+```bash
+# Терминал 1:
 kubectl port-forward -n monitoring svc/kube-prometheus-stack-prometheus 9090:9090
 
-# В другом терминале:
-PROM_URL=http://localhost:9090 ./scripts/check-grafana-metrics-in-prometheus.sh
+# Терминал 2:
+SKIP_PORT_FORWARD=1 PROM_URL=http://localhost:9090 ./scripts/check-grafana-metrics-in-prometheus.sh
 ```
 
 ```bash
-# Вариант 2: из пода Prometheus в кластере (если есть curl):
+# Вариант 2: из пода в кластере (в образе Prometheus обычно нет curl; при наличии curl или wget):
 kubectl cp scripts/check-grafana-metrics-in-prometheus.sh monitoring/$(kubectl get pod -n monitoring -l app.kubernetes.io/name=prometheus -o jsonpath='{.items[0].metadata.name}'):/tmp/check.sh
 kubectl exec -n monitoring deploy/kube-prometheus-stack-prometheus -- sh -c 'PROM_URL=http://localhost:9090 sh /tmp/check.sh'
 ```
 
-**Быстрая проверка ключевых метрик** (из пода в кластере):
+**Быстрая проверка ключевых метрик** (нужен curl и доступ к Prometheus из пода; при необходимости запустите временный debug pod в namespace monitoring):
 
 ```bash
 PROM="http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090/api/v1/query"
