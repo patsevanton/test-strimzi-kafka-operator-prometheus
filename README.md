@@ -54,8 +54,8 @@ helm upgrade --install strimzi-cluster-operator \
 ### Установка Kafka из examples
 
 ```bash
-# Kafka-кластер (JBOD)
-curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/kafka/kafka-jbod.yaml | kubectl apply -n myproject -f -
+# Kafka-кластер (KRaft, persistent — KafkaNodePool controller + broker)
+curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/kafka/kafka-persistent.yaml | kubectl apply -n myproject -f -
 
 # Топик
 curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/topic/kafka-topic.yaml | kubectl apply -n myproject -f -
@@ -70,7 +70,7 @@ curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/pa
 kubectl wait kafka/my-cluster -n myproject --for=condition=Ready --timeout=600s
 ```
 
-**Аутентификация SCRAM (для Schema Registry и Producer/Consumer):** Kafka из examples (kafka-jbod) по умолчанию без аутентификации. Для SASL/SCRAM включите её на listener и замените пользователя на SCRAM-вариант без ACL (кластер из examples не поддерживает authorization/ACL):
+**Аутентификация SCRAM (для Schema Registry и Producer/Consumer):** Kafka из examples (kafka-persistent) по умолчанию без аутентификации. Для SASL/SCRAM включите её на listener и замените пользователя на SCRAM-вариант без ACL (кластер из examples не поддерживает authorization/ACL):
 
 ```bash
 kubectl patch kafka my-cluster -n myproject --type=json -p='[{"op": "add", "path": "/spec/kafka/listeners/0/authentication", "value": {"type": "scram-sha-512"}}]'
@@ -82,7 +82,7 @@ kubectl wait kafkauser/my-user -n myproject --for=condition=Ready --timeout=120s
 
 ### Metrics (examples/metrics)
 
-**Внимание:** полный `kafka-metrics.yaml` содержит KRaft-кластер и **заменяет** kafka-jbod. Поскольку Kafka выше развёрнут из kafka-jbod, для JMX-метрик добавьте в существующий `Kafka` блок `spec.kafka.metricsConfig` и ConfigMap `kafka-metrics` (инструкция — в разделе [Как активировать метрики](#как-активировать-метрики)). Альтернатива: заменить kafka-jbod на kafka-metrics.yaml (KRaft) при первичной установке.
+**Внимание:** Kafka развёрнут из **kafka-persistent.yaml** (KRaft). Для JMX-метрик добавьте в существующий ресурс `Kafka` блок `spec.kafka.metricsConfig` и ConfigMap `kafka-metrics` (инструкция — в разделе [Как активировать метрики](#как-активировать-метрики)).
 
 ```bash
 # PodMonitors для Prometheus/VictoriaMetrics (применяем в namespace monitoring)
@@ -310,7 +310,7 @@ done
 
 #### Команды для JMX-метрик брокеров (Strimzi Kafka, Strimzi KRaft)
 
-Если Kafka уже развёрнут из kafka-jbod, добавьте JMX-метрики без замены кластера:
+Если Kafka уже развёрнут из kafka-persistent (KRaft), добавьте JMX-метрики без замены кластера:
 
 ```bash
 # 1. Извлечь ConfigMap kafka-metrics из kafka-metrics.yaml и применить в namespace Kafka
@@ -324,8 +324,8 @@ kubectl patch kafka my-cluster -n myproject --type=json -p='[{"op": "add", "path
 curl -sL https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/prometheus-install/pod-monitors/kafka-resources-metrics.yaml | kubectl apply -n monitoring -f -
 kubectl label podmonitor -n monitoring kafka-resources-metrics release=kube-prometheus-stack --overwrite
 
-# 4. Дождаться перезапуска брокеров (Strimzi добавит JMX Exporter sidecar)
-kubectl rollout status statefulset/my-cluster-kafka -n myproject --timeout=600s
+# 4. Дождаться перезапуска брокеров (Strimzi добавит JMX Exporter sidecar). KRaft: StatefulSet брокеров — my-cluster-broker
+kubectl rollout status statefulset/my-cluster-broker -n myproject --timeout=600s
 ```
 
 #### Команды для метрик Cluster Operator (Strimzi Operators)
@@ -356,11 +356,11 @@ kubectl patch podmonitor -n monitoring cluster-operator-metrics --type=json -p='
 
 **Важно:** для kube-prometheus-stack все PodMonitor’ы нужно применять в namespace `monitoring` и добавить label `release: kube-prometheus-stack`, иначе Prometheus их не выберет. Документация Strimzi по метрикам: [strimzi.io — Metrics](https://strimzi.io/docs/operators/latest/deploying.html#assembly-metrics-strimzi).
 
-Если кластер уже развёрнут из **kafka-jbod.yaml** (без JMX), не обязательно заменять его на полный **kafka-metrics.yaml** (там KRaft + NodePools): можно добавить в существующий ресурс `Kafka` блок `spec.kafka.metricsConfig` и отдельно применить ConfigMap `kafka-metrics` (фрагмент из [kafka-metrics.yaml](https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/kafka-metrics.yaml) — секция `kind: ConfigMap`, `name: kafka-metrics`).
+Если кластер уже развёрнут из **kafka-persistent.yaml** (KRaft, без JMX), не обязательно заменять его на **kafka-metrics.yaml**: можно добавить в существующий ресурс `Kafka` блок `spec.kafka.metricsConfig` и отдельно применить ConfigMap `kafka-metrics` (фрагмент из [kafka-metrics.yaml](https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/kafka-metrics.yaml) — секция `kind: ConfigMap`, `name: kafka-metrics`).
 
 ### Почему большинство метрик отсутствуют
 
-Кратко: часть метрик дашборды ждут от **Kafka Exporter** (топики/офсеты/consumer groups), часть — от **JMX брокеров Kafka** (kafka_server_*, jvm_*, kafka_log_* и т.д.), часть — от **Strimzi Cluster/Entity Operator**. Если настроен только Kafka Exporter и обычный kafka-jbod без JMX — метрик из JMX и операторов не будет.
+Кратко: часть метрик дашборды ждут от **Kafka Exporter** (топики/офсеты/consumer groups), часть — от **JMX брокеров Kafka** (kafka_server_*, jvm_*, kafka_log_* и т.д.), часть — от **Strimzi Cluster/Entity Operator**. Если настроен только Kafka Exporter и кластер kafka-persistent без JMX — метрик из JMX и операторов не будет.
 
 #### Kafka Exporter (strimzi-kafka-exporter.json)
 
@@ -374,7 +374,7 @@ kubectl patch podmonitor -n monitoring cluster-operator-metrics --type=json -p='
 #### Strimzi Kafka (strimzi-kafka.json), Strimzi KRaft (strimzi-kraft.json)
 
 - **`kafka_server_*`**, **`jvm_*`**, **`kafka_log_log_size`**, **`kafka_cluster_partition_*`** — метрики из **JMX** брокеров Kafka. Для их появления нужно:
-  1. Применить **kafka-metrics.yaml** вместо kafka-jbod.yaml (в нём `metricsConfig: jmxPrometheusExporter` и ConfigMap `kafka-metrics`)
+  1. Добавить в **Kafka** CR блок `spec.kafka.metricsConfig` и ConfigMap `kafka-metrics` (из [kafka-metrics.yaml](https://github.com/strimzi/strimzi-kafka-operator/blob/main/packaging/examples/metrics/kafka-metrics.yaml))
   2. Применить **PodMonitors** (kafka-resources-metrics и др.) в namespace `monitoring` с label `release: kube-prometheus-stack`
 
 #### Strimzi Operators (strimzi-operators.json)
