@@ -7,6 +7,8 @@ helm repo add prometheus-community https://prometheus-community.github.io/helm-c
 helm repo update
 ```
 
+**Если репозиторий уже добавлен** (`helm repo list` показывает `prometheus-community`), команду `helm repo add` можно пропустить; `helm repo update` выполнить для обновления индекса чартов.
+
 2. Установить kube-prometheus-stack с Ingress для Grafana на `grafana.apatsev.org.ru` (при первом запуске установка может занять несколько минут из-за `--wait`):
 
 ```bash
@@ -42,6 +44,8 @@ Namespace `myproject` должен существовать заранее (в �
 kubectl create namespace myproject
 ```
 
+**Если namespace уже существует**, команда вернёт `namespace/myproject unchanged` — это нормально.
+
 ```bash
 helm upgrade --install strimzi-cluster-operator \
   oci://quay.io/strimzi-helm/strimzi-kafka-operator \
@@ -55,8 +59,8 @@ helm upgrade --install strimzi-cluster-operator \
 ### Установка Kafka из examples
 
 ```bash
-# Kafka-кластер (KRaft, persistent — KafkaNodePool controller + broker)
-curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/kafka/kafka-persistent.yaml | kubectl apply -n myproject -f -
+# Kafka-кластер (KRaft, persistent, JMX-метрики и Kafka Exporter из коробки)
+curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/kafka-metrics.yaml | kubectl apply -n myproject -f -
 
 # Топик
 curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/topic/kafka-topic.yaml | kubectl apply -n myproject -f -
@@ -65,7 +69,7 @@ curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/pa
 curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/user/kafka-user.yaml | kubectl apply -n myproject -f -
 ```
 
-**Ожидание готовности Kafka** (кластер поднимается несколько минут):
+**Ожидание готовности Kafka** (кластер поднимается несколько минут; при повторном запуске, если Kafka уже Ready, команда завершится сразу):
 
 ```bash
 kubectl wait kafka/my-cluster -n myproject --for=condition=Ready --timeout=600s
@@ -73,7 +77,7 @@ kubectl wait kafka/my-cluster -n myproject --for=condition=Ready --timeout=600s
 
 ### Metrics (examples/metrics)
 
-**Внимание:** Kafka развёрнут из **kafka-persistent.yaml** (KRaft). Для JMX-метрик добавьте в существующий ресурс `Kafka` блок `spec.kafka.metricsConfig` и ConfigMap `kafka-metrics` (инструкция — в разделе [Как активировать метрики](#как-активировать-метрики)).
+**Внимание:** Kafka развёрнут из **kafka-metrics.yaml** — JMX-метрики (`metricsConfig`) и Kafka Exporter уже включены в манифест. Остаётся применить PodMonitors для сбора метрик в Prometheus.
 
 ```bash
 # PodMonitors для Prometheus/VictoriaMetrics (применяем в namespace monitoring)
@@ -87,6 +91,30 @@ curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/pa
 kubectl label podmonitor -n monitoring cluster-operator-metrics entity-operator-metrics kafka-resources-metrics release=kube-prometheus-stack --overwrite
 kubectl patch podmonitor -n monitoring cluster-operator-metrics --type=json -p='[{"op": "replace", "path": "/spec/namespaceSelector/matchNames", "value": ["strimzi"]}]'
 # entity-operator-metrics и kafka-resources-metrics уже с matchNames: [myproject] — не патчим
+```
+
+**ServiceMonitor для Strimzi Kafka Exporter** (kafka-metrics.yaml включает Kafka Exporter в ресурсе Kafka). Strimzi создаёт Service `my-cluster-kafka-exporter` в myproject. Создайте ServiceMonitor, чтобы Prometheus собирал метрики топиков и consumer groups:
+
+```bash
+kubectl apply -f - <<'EOF'
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: kafka-exporter
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      strimzi.io/kind: KafkaExporter
+  namespaceSelector:
+    matchNames:
+      - myproject
+  endpoints:
+    - port: metrics
+      path: /metrics
+EOF
 ```
 
 ```bash
@@ -107,23 +135,11 @@ kubectl label svc -n myproject strimzi-kube-state-metrics app.kubernetes.io/name
 
 ## Kafka Exporter
 
-- Kafka Exporter — сторонний проект ([danielqsj/kafka_exporter](https://github.com/danielqsj/kafka_exporter)), который подключается к брокерам по Kafka API и отдаёт метрики в формате Prometheus.
+Kafka Exporter ([danielqsj/kafka_exporter](https://github.com/danielqsj/kafka_exporter)) подключается к брокерам по Kafka API и отдаёт метрики в формате Prometheus.
 
-**Установка (Helm, Prometheus Operator)**
+**kafka-metrics.yaml** уже включает Kafka Exporter в ресурсе `Kafka` (`spec.kafkaExporter`). Strimzi развернёт его в namespace кластера. Для сбора метрик добавьте ServiceMonitor с label `release=kube-prometheus-stack`.
 
-Репозиторий уже добавлен для kube-prometheus-stack. Kafka без аутентификации — установите экспортер:
-
-```bash
-helm upgrade --install prometheus-kafka-exporter \
-  prometheus-community/prometheus-kafka-exporter \
-  --namespace monitoring \
-  --create-namespace \
-  --set kafkaServer[0]=my-cluster-kafka-bootstrap.myproject.svc.cluster.local:9092 \
-  --set prometheus.serviceMonitor.enabled=true \
-  --set prometheus.serviceMonitor.additionalLabels.release=kube-prometheus-stack
-```
-
-Проверка: в Prometheus — target `prometheus-kafka-exporter` (namespace monitoring), метрики `kafka_topic_partitions`, `kafka_topic_partition_current_offset` и др. Метрики `strimzi_*` (`strimzi_kafka_topic_resource_info`, `strimzi_pod_set_resource_info` и т.д.) — от strimzi-kube-state-metrics (раздел [Metrics](#metrics-examplesmetrics)).
+Проверка: в Prometheus — target `prometheus-kafka-exporter` (namespace monitoring) или Strimzi Kafka Exporter (`my-cluster-kafka-exporter` в myproject), метрики `kafka_topic_partitions`, `kafka_topic_partition_current_offset` и др. Метрики `strimzi_*` (`strimzi_kafka_topic_resource_info`, `strimzi_pod_set_resource_info` и т.д.) — от strimzi-kube-state-metrics (раздел [Metrics](#metrics-examplesmetrics)).
 
 ## Импорт дашбордов Grafana
 
@@ -173,7 +189,7 @@ for m in strimzi_resources strimzi_reconciliations_total kafka_topic_partitions 
 done
 ```
 
-Либо в UI Prometheus (Status → Targets): targets `strimzi-kube-state-metrics`, `cluster-operator-metrics`, `kafka-resources-metrics`, `prometheus-kafka-exporter` в состоянии up.
+Либо в UI Prometheus (Status → Targets): targets `strimzi-kube-state-metrics`, `cluster-operator-metrics`, `kafka-resources-metrics`, `kafka-exporter` (или `prometheus-kafka-exporter` при использовании Helm) в состоянии up.
 
 ## Статус проверки
 
@@ -182,13 +198,13 @@ done
 - **CRD** — kafkas, kafkatopics, kafkausers и др.
 - **Kafka** — my-cluster (Ready), my-topic, my-user
 
-### strimzi-kube-state-metrics в Prometheus (2026-02-01)
+### strimzi-kube-state-metrics в Prometheus
 - **Target** — есть (myproject/strimzi-kube-state-metrics, health: up). Требовались: labels на Service (шаг 4). При деплое в myproject patch ClusterRoleBinding не нужен.
 - **Метрики** — есть: `strimzi_kafka_topic_resource_info`, `strimzi_kafka_user_resource_info`, `strimzi_kafka_resource_info`, `strimzi_kafka_node_pool_resource_info`, `strimzi_pod_set_resource_info`.
 
 ### Метрики из JSON-дашбордов Grafana (Strimzi)
 
-**Почему дашборды Strimzi Kafka и Strimzi KRaft показывают «no data»?** Они строятся по JMX-метрикам брокеров Kafka (`kafka_server_*`, `jvm_*`, `kafka_server_raftmetrics_*` и т.д.). Кластер из **kafka-persistent.yaml** по умолчанию не включает JMX Exporter — метрик нет, дашборды пустые. Чтобы появились данные: включите JMX-метрики по разделу [Как активировать метрики](#как-активировать-метрики) (блок «Команды для JMX-метрик брокеров»).
+**Почему дашборды Strimzi Kafka и Strimzi KRaft показывают «no data»?** Они строятся по JMX-метрикам брокеров Kafka (`kafka_server_*`, `jvm_*`, `kafka_server_raftmetrics_*` и т.д.). Кластер из **kafka-metrics.yaml** уже включает JMX Exporter. Убедитесь, что применены PodMonitors (kafka-resources-metrics) с label `release=kube-prometheus-stack` — см. раздел [Metrics (examples/metrics)](#metrics-examplesmetrics).
 
 Список метрик Prometheus, используемых в дашбордах (сверено с JSON из `packaging/examples/metrics/grafana-dashboards/`). Статус проверки в Prometheus:
 
@@ -279,7 +295,7 @@ done
 Чтобы дашборды Grafana (Strimzi) показывали данные, нужно включить сбор метрик и настроить Prometheus:
 
 1. **Метрики брокеров Kafka (JMX)** — `kafka_server_*`, `jvm_*`, `kafka_log_*`, `kafka_cluster_partition_atminisr` и др.:
-   - Применить [kafka-metrics.yaml](https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/kafka-metrics.yaml) в namespace кластера (или добавить в существующий Kafka CR блок `spec.kafka.metricsConfig` и ConfigMap `kafka-metrics`).
+   - Развернуть Kafka из [kafka-metrics.yaml](https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/kafka-metrics.yaml) — JMX Exporter и ConfigMap `kafka-metrics` уже включены.
    - Применить PodMonitor для брокеров в namespace `monitoring` и добавить label `release=kube-prometheus-stack` (см. раздел [Metrics (examples/metrics)](#metrics-examplesmetrics)).
 
 2. **Метрики Cluster/Entity Operator** — `strimzi_resources`, `strimzi_reconciliations_*`, `strimzi_certificate_expiration_timestamp_ms`:
@@ -295,25 +311,18 @@ done
 
 5. **Проверка**: выполнить скрипт `scripts/check-grafana-metrics-in-prometheus.sh` или быструю проверку ключевых метрик (см. раздел [Проверка наличия метрик (Prometheus)](#проверка-наличия-метрик-prometheus)).
 
-#### Команды для JMX-метрик брокеров (Strimzi Kafka, Strimzi KRaft)
+#### PodMonitor для JMX-метрик брокеров (Strimzi Kafka, Strimzi KRaft)
 
-Если Kafka уже развёрнут из kafka-persistent (KRaft), добавьте JMX-метрики без замены кластера:
+Kafka из kafka-metrics.yaml уже включает JMX Exporter. Нужно только применить PodMonitor и labels:
 
 ```bash
-# 1. Извлечь ConfigMap kafka-metrics из kafka-metrics.yaml и применить в namespace Kafka
-curl -sL https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/kafka-metrics.yaml | \
-  awk '/^---$/{out=""} {out=out $0 "\n"} END{print out}' | kubectl apply -n myproject -f -
-
-# 2. Добавить metricsConfig в существующий Kafka CR (подставьте my-cluster и myproject)
-kubectl patch kafka my-cluster -n myproject --type=json -p='[{"op": "add", "path": "/spec/kafka/metricsConfig", "value": {"type": "jmxPrometheusExporter", "valueFrom": {"configMapKeyRef": {"name": "kafka-metrics", "key": "kafka-metrics-config.yml"}}}}]'
-
-# 3. PodMonitor для брокеров (если ещё не применён)
+# PodMonitor для брокеров (если ещё не применён)
 curl -sL https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/prometheus-install/pod-monitors/kafka-resources-metrics.yaml | kubectl apply -n monitoring -f -
 kubectl label podmonitor -n monitoring kafka-resources-metrics release=kube-prometheus-stack --overwrite
 
-# 4. Дождаться перезапуска брокеров (Strimzi добавит JMX в под и откроет порт 9404). В KRaft брокеры управляются StrimziPodSet, не StatefulSet — просто подождите 2–5 минут и проверьте, что у подов есть порт tcp-prometheus (9404) и метрики доступны
+# Проверка: у подов должен быть порт tcp-prometheus (9404)
 kubectl get pods -n myproject -l strimzi.io/name=my-cluster-kafka -o wide
-# Проверка JMX из пода: kubectl exec -n myproject my-cluster-broker-0 -- wget -qO- http://localhost:9404/metrics | head -5
+# kubectl exec -n myproject my-cluster-broker-0 -- wget -qO- http://localhost:9404/metrics | head -5
 ```
 
 #### Команды для метрик Cluster Operator (Strimzi Operators)
@@ -344,7 +353,7 @@ kubectl patch podmonitor -n monitoring cluster-operator-metrics --type=json -p='
 
 **Важно:** для kube-prometheus-stack все PodMonitor’ы нужно применять в namespace `monitoring` и добавить label `release: kube-prometheus-stack`, иначе Prometheus их не выберет. Документация Strimzi по метрикам: [strimzi.io — Metrics](https://strimzi.io/docs/operators/latest/deploying.html#assembly-metrics-strimzi).
 
-Если кластер уже развёрнут из **kafka-persistent.yaml** (KRaft, без JMX), не обязательно заменять его на **kafka-metrics.yaml**: можно добавить в существующий ресурс `Kafka` блок `spec.kafka.metricsConfig` и отдельно применить ConfigMap `kafka-metrics` (фрагмент из [kafka-metrics.yaml](https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/kafka-metrics.yaml) — секция `kind: ConfigMap`, `name: kafka-metrics`).
+**kafka-metrics.yaml** — полноценный манифест Kafka с JMX, ConfigMap `kafka-metrics` и Kafka Exporter. Рекомендуется использовать его вместо kafka-persistent.yaml при необходимости метрик.
 
 ### Почему большинство метрик отсутствуют
 
@@ -361,9 +370,7 @@ kubectl patch podmonitor -n monitoring cluster-operator-metrics --type=json -p='
 
 #### Strimzi Kafka (strimzi-kafka.json), Strimzi KRaft (strimzi-kraft.json)
 
-- **`kafka_server_*`**, **`jvm_*`**, **`kafka_log_log_size`**, **`kafka_cluster_partition_*`** — метрики из **JMX** брокеров Kafka. Для их появления нужно:
-  1. Добавить в **Kafka** CR блок `spec.kafka.metricsConfig` и ConfigMap `kafka-metrics` (из [kafka-metrics.yaml](https://github.com/strimzi/strimzi-kafka-operator/blob/main/packaging/examples/metrics/kafka-metrics.yaml))
-  2. Применить **PodMonitors** (kafka-resources-metrics и др.) в namespace `monitoring` с label `release: kube-prometheus-stack`
+- **`kafka_server_*`**, **`jvm_*`**, **`kafka_log_log_size`**, **`kafka_cluster_partition_*`** — метрики из **JMX** брокеров Kafka. Kafka из **kafka-metrics.yaml** уже включает `metricsConfig` и ConfigMap. Остаётся применить **PodMonitors** (kafka-resources-metrics) в namespace `monitoring` с label `release=kube-prometheus-stack`.
 
 #### Strimzi Operators (strimzi-operators.json)
 
@@ -513,5 +520,6 @@ kubectl logs -n kafka-consumer -l app.kubernetes.io/name=kafka-consumer --tail=5
 # Schema Registry, Strimzi operator, Kafka Exporter
 kubectl logs -n schema-registry deploy/schema-registry --tail=30
 kubectl logs -n strimzi deploy/strimzi-cluster-operator --tail=30
-kubectl logs -n monitoring -l app=prometheus-kafka-exporter --tail=20
+# При использовании Strimzi kafka-metrics.yaml Kafka Exporter развёрнут в myproject (не отдельный Helm chart в monitoring):
+kubectl logs -n myproject deploy/my-cluster-kafka-exporter --tail=20
 ```
