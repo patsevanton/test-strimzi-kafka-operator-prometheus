@@ -79,8 +79,14 @@ Kafka развёрнут из **kafka-metrics.yaml** — JMX-метрики (`me
 
 ```bash
 # PodMonitors для Prometheus: сбор метрик Strimzi Cluster Operator, Entity Operator (Topic/User) и Kafka-брокеров (JMX)
+
+# Сбор метрик Strimzi Cluster Operator (состояние оператора, реконсиляция)
 kubectl apply -n monitoring -f strimzi/cluster-operator-metrics.yaml
+
+# Сбор метрик Entity Operator — Topic Operator и User Operator
 kubectl apply -n monitoring -f strimzi/entity-operator-metrics.yaml
+
+# Сбор JMX-метрик с подов брокеров Kafka
 kubectl apply -n monitoring -f strimzi/kafka-resources-metrics.yaml
 
 # В примерах Strimzi по умолчанию namespaceSelector: myproject (Kafka и Entity Operator в myproject). Добавить label для kube-prometheus-stack и поправить только cluster-operator на namespace strimzi:
