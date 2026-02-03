@@ -7,6 +7,8 @@ helm repo add prometheus-community https://prometheus-community.github.io/helm-c
 helm repo update
 ```
 
+**Когда команды не нужны:** если репозиторий уже добавлен (`helm repo list | grep prometheus-community`), команду `helm repo add` можно пропустить; `helm repo update` полезен для получения актуальных чартов.
+
 2. Установить kube-prometheus-stack с Ingress для Grafana на `grafana.apatsev.org.ru` (при первом запуске установка может занять несколько минут из-за `--wait`):
 
 ```bash
@@ -21,6 +23,8 @@ helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheu
   --timeout 10m
 ```
 
+**Когда команда не нужна:** если kube-prometheus-stack уже установлен в namespace `monitoring` (`helm list -n monitoring | grep kube-prometheus-stack`), повторная установка не требуется.
+
 3. Получить пароль администратора Grafana:
 
 ```bash
@@ -28,11 +32,15 @@ kubectl get secret -n monitoring kube-prometheus-stack-grafana -o jsonpath="{.da
 echo
 ```
 
+**Когда команда не нужна:** если пароль уже сохранён или получен ранее.
+
 4. Открыть Grafana: http://grafana.apatsev.org.ru (логин по умолчанию: `admin`).
 
 ### Strimzi
 
 Strimzi — оператор для управления Kafka в Kubernetes; мониторинг вынесен в отдельные компоненты (Kafka Exporter, kube-state-metrics, PodMonitors для брокеров и операторов).
+
+Манифесты из examples Strimzi сохранены локально в директории **strimzi/** (kafka-metrics, kafka-topic, kafka-user, PodMonitors, kube-state-metrics). Установка — через `kubectl apply -f strimzi/...`.
 
 ### Установка Strimzi
 
@@ -42,6 +50,8 @@ Namespace `myproject` должен существовать заранее (в �
 # Идемпотентно: создаёт namespace только если его ещё нет
 kubectl get ns myproject 2>/dev/null || kubectl create namespace myproject
 ```
+
+**Когда команда не нужна:** если namespace `myproject` уже существует, `kubectl get ns myproject` выполнится успешно и `kubectl create namespace` не запустится.
 
 ```bash
 helm upgrade --install strimzi-cluster-operator \
@@ -53,20 +63,25 @@ helm upgrade --install strimzi-cluster-operator \
   --version 0.50.0
 ```
 
-### Установка Kafka из examples
+**Когда команда не нужна:** если Strimzi operator уже установлен в namespace `strimzi` (`helm list -n strimzi | grep strimzi-cluster-operator`), установку можно пропустить.
+
+### Установка Kafka из examples (локальные манифесты в strimzi/)
 
 ```bash
 # Kafka-кластер (KRaft, persistent, JMX-метрики и Kafka Exporter из коробки)
-curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/kafka-metrics.yaml | kubectl apply -n myproject -f -
+kubectl apply -n myproject -f strimzi/kafka-metrics.yaml
 
 # Топик
-curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/topic/kafka-topic.yaml | kubectl apply -n myproject -f -
+kubectl apply -n myproject -f strimzi/kafka-topic.yaml
 
 # Пользователь Kafka
-curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/user/kafka-user.yaml | kubectl apply -n myproject -f -
+kubectl apply -n myproject -f strimzi/kafka-user.yaml
 ```
 
+**Когда команды не нужны:** если Kafka-кластер, топик и пользователь уже созданы в `myproject`, повторный `kubectl apply` можно пропустить (идемпотентно обновит ресурсы при изменении манифестов).
+
 ```bash
+# Дождаться готовности Kafka (при первом развёртывании может занять несколько минут)
 kubectl wait kafka/my-cluster -n myproject --for=condition=Ready --timeout=600s
 ```
 
@@ -76,11 +91,9 @@ Kafka развёрнут из **kafka-metrics.yaml** — JMX-метрики (`me
 
 ```bash
 # PodMonitors для Prometheus: сбор метрик Strimzi Cluster Operator, Entity Operator (Topic/User) и Kafka-брокеров (JMX)
-curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/prometheus-install/pod-monitors/cluster-operator-metrics.yaml | kubectl apply -n monitoring -f -
-
-curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/prometheus-install/pod-monitors/entity-operator-metrics.yaml | kubectl apply -n monitoring -f -
-
-curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/prometheus-install/pod-monitors/kafka-resources-metrics.yaml | kubectl apply -n monitoring -f -
+kubectl apply -n monitoring -f strimzi/cluster-operator-metrics.yaml
+kubectl apply -n monitoring -f strimzi/entity-operator-metrics.yaml
+kubectl apply -n monitoring -f strimzi/kafka-resources-metrics.yaml
 
 # В примерах Strimzi по умолчанию namespaceSelector: myproject (Kafka и Entity Operator в myproject). Добавить label для kube-prometheus-stack и поправить только cluster-operator на namespace strimzi:
 kubectl label podmonitor -n monitoring cluster-operator-metrics entity-operator-metrics kafka-resources-metrics release=kube-prometheus-stack --overwrite
@@ -114,10 +127,10 @@ EOF
 
 ```bash
 # 1. ConfigMap с конфигом метрик по CRD Strimzi
-curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/kube-state-metrics/configmap.yaml | kubectl apply -n myproject -f -
+kubectl apply -n myproject -f strimzi/kube-state-metrics-configmap.yaml
 
 # 2. Deployment, Service, RBAC и ServiceMonitor
-curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/packaging/examples/metrics/kube-state-metrics/ksm.yaml | kubectl apply -n myproject -f -
+kubectl apply -n myproject -f strimzi/kube-state-metrics-ksm.yaml
 
 # 3. Добавить label release: kube-prometheus-stack в ServiceMonitor, чтобы Prometheus его выбирал
 kubectl label servicemonitor -n myproject strimzi-kube-state-metrics release=kube-prometheus-stack --overwrite
@@ -148,6 +161,8 @@ https://github.com/strimzi/strimzi-kafka-operator/blob/main/packaging/examples/m
 
 Проверка метрик: `./scripts/check-grafana-metrics-in-prometheus.sh` (скрипт поднимает port-forward к Prometheus). Либо в UI Prometheus (Status → Targets): targets `strimzi-kube-state-metrics`, `cluster-operator-metrics`, `kafka-resources-metrics`, `kafka-exporter` в состоянии up.
 
+Метрики `kafka_consumergroup_current_offset` и `kafka_consumergroup_lag` появляются в Prometheus только при наличии активных consumer groups (например, после запуска Consumer); без потребителей скрипт проверки покажет их как отсутствующие — это ожидаемо. **После установки Producer и Consumer подождите 30–60 секунд** перед запуском скрипта проверки метрик, чтобы Prometheus успел собрать метрики consumer group.
+
 ### Schema Registry (Karapace) для Avro
 
 Go-приложение из этого репозитория использует Avro и Schema Registry API. Для удобства здесь добавлены готовые манифесты для **[Karapace](https://github.com/Aiven-Open/karapace)** — open-source реализации API Confluent Schema Registry (drop-in replacement).
@@ -161,7 +176,6 @@ Karapace поднимается как обычный HTTP-сервис и хр�
 
 ```bash
 kubectl create namespace schema-registry --dry-run=client -o yaml | kubectl apply -f -
-```
 
 # Создать топик для схем
 kubectl apply -f strimzi/kafka-topic-schemas.yaml
@@ -174,6 +188,8 @@ kubectl rollout status deploy/schema-registry -n schema-registry --timeout=5m
 sleep 60
 kubectl get svc -n schema-registry schema-registry
 ```
+
+**Когда команды не нужны:** если namespace `schema-registry` уже есть, топик `schemas-topic` и Deployment Schema Registry уже развёрнуты — повторный apply идемпотентен; `sleep 60` можно пропустить при перезапуске уже работавшего Karapace.
 
 **Ожидание:** `sleep 60` или дольше нужен после первого запуска Karapace, чтобы успел выбраться master; иначе приложение Producer при регистрации схем может получить ошибку 503.
 

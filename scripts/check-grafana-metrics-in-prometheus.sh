@@ -25,7 +25,7 @@ if [[ "$PROM_URL" == http://localhost:9090* ]] && [[ -z "${SKIP_PORT_FORWARD:-}"
     echo "Запуск: kubectl port-forward -n $KUBE_NS svc/$PROM_SVC 9090:9090"
     kubectl port-forward -n "$KUBE_NS" "svc/$PROM_SVC" 9090:9090 &
     PF_PID=$!
-    trap 'kill $PF_PID 2>/dev/null; wait $PF_PID 2>/dev/null' EXIT
+    trap 'kill $PF_PID 2>/dev/null; wait $PF_PID 2>/dev/null; true' EXIT
     # Ждём, пока порт станет доступен
     for i in 1 2 3 4 5 6 7 8 9 10; do
       if curl -s -o /dev/null -w "%{http_code}" "http://localhost:9090/-/healthy" 2>/dev/null | grep -q 200; then
