@@ -7,8 +7,6 @@ helm repo add prometheus-community https://prometheus-community.github.io/helm-c
 helm repo update
 ```
 
-**Когда не нужно:** если репозиторий уже добавлен (`helm repo list` показывает prometheus-community), достаточно `helm repo update`.
-
 2. Установить kube-prometheus-stack с Ingress для Grafana на `grafana.apatsev.org.ru` (при первом запуске установка может занять несколько минут из-за `--wait`):
 
 ```bash
@@ -30,8 +28,6 @@ kubectl get secret -n monitoring kube-prometheus-stack-grafana -o jsonpath="{.da
 echo
 ```
 
-**Когда не нужно:** только для входа в UI Grafana; для проверки метрик через скрипт или Prometheus API пароль не требуется.
-
 4. Открыть Grafana: http://grafana.apatsev.org.ru (логин по умолчанию: `admin`).
 
 ### Strimzi
@@ -43,10 +39,9 @@ Strimzi — оператор для управления Kafka в Kubernetes; м
 Namespace `myproject` должен существовать заранее (в примерах Strimzi по умолчанию используется именно он):
 
 ```bash
-kubectl create namespace myproject
+# Идемпотентно: создаёт namespace только если его ещё нет
+kubectl get ns myproject 2>/dev/null || kubectl create namespace myproject
 ```
-
-**Когда не нужно:** если namespace уже есть (`kubectl get ns myproject` не выдаёт ошибку).
 
 ```bash
 helm upgrade --install strimzi-cluster-operator \
@@ -74,8 +69,6 @@ curl -s https://raw.githubusercontent.com/strimzi/strimzi-kafka-operator/main/pa
 ```bash
 kubectl wait kafka/my-cluster -n myproject --for=condition=Ready --timeout=600s
 ```
-
-**Ожидание:** первый запуск кластера Kafka может занять 2–3 минуты; при необходимости можно следить за подами: `kubectl get pods -n myproject -w`.
 
 ### Metrics (examples/metrics)
 
@@ -135,8 +128,6 @@ kubectl label svc -n myproject strimzi-kube-state-metrics app.kubernetes.io/name
 # 5. В манифесте Strimzi namespace=myproject — при деплое в myproject патч не нужен
 ```
 
-**Когда не нужно:** блок с PodMonitors/ServiceMonitor/kube-state-metrics — только если мониторинг Strimzi уже настроен и targets в Prometheus в состоянии up.
-
 ## Kafka Exporter
 
 Kafka Exporter ([danielqsj/kafka_exporter](https://github.com/danielqsj/kafka_exporter)) подключается к брокерам по Kafka API и отдаёт метрики в формате Prometheus.
@@ -155,7 +146,7 @@ https://github.com/strimzi/strimzi-kafka-operator/blob/main/packaging/examples/m
 
 https://github.com/strimzi/strimzi-kafka-operator/blob/main/packaging/examples/metrics/grafana-dashboards/strimzi-operators.json
 
-Проверка метрик: `./scripts/check-grafana-metrics-in-prometheus.sh` (скрипт поднимает port-forward к Prometheus). Либо в UI Prometheus (Status → Targets): targets `strimzi-kube-state-metrics`, `cluster-operator-metrics`, `kafka-resources-metrics`, `kafka-exporter` в состоянии up. После первого применения PodMonitors/ServiceMonitor метрики могут появиться в Prometheus через 1–2 минуты (интервал scrape); при необходимости подождать и запустить скрипт снова.
+Проверка метрик: `./scripts/check-grafana-metrics-in-prometheus.sh` (скрипт поднимает port-forward к Prometheus). Либо в UI Prometheus (Status → Targets): targets `strimzi-kube-state-metrics`, `cluster-operator-metrics`, `kafka-resources-metrics`, `kafka-exporter` в состоянии up.
 
 ### Schema Registry (Karapace) для Avro
 
@@ -172,9 +163,6 @@ Karapace поднимается как обычный HTTP-сервис и хр�
 kubectl create namespace schema-registry --dry-run=client -o yaml | kubectl apply -f -
 ```
 
-**Когда не нужно:** создание namespace — если `schema-registry` уже существует.
-
-```bash
 # Создать топик для схем
 kubectl apply -f strimzi/kafka-topic-schemas.yaml
 kubectl wait kafkatopic/schemas-topic -n myproject --for=condition=Ready --timeout=120s
@@ -187,7 +175,7 @@ sleep 60
 kubectl get svc -n schema-registry schema-registry
 ```
 
-**Ожидание:** `sleep 60` или дольше нужен после первого запуска Karapace, чтобы успел выбраться master; иначе приложение Producer при регистрации схем может получить ошибку 50003.
+**Ожидание:** `sleep 60` или дольше нужен после первого запуска Karapace, чтобы успел выбраться master; иначе приложение Producer при регистрации схем может получить ошибку 503.
 
 ## Producer App и Consumer App
 
@@ -226,8 +214,6 @@ helm upgrade --install kafka-producer ./helm/kafka-producer \
   --set image.repository="antonpatsev/strimzi-kafka-chaos-testing" \
   --set image.tag="3.4.0"
 ```
-
-**Когда не нужно:** если образ уже собран и опубликован (или используется образ из values по умолчанию), шаг «Сборка и публикация» можно пропустить и сразу устанавливать Helm chart с нужными `kafka.brokers` и `schemaRegistry.url`.
 
 ### Переменные окружения
 

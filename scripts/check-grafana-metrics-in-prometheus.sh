@@ -175,3 +175,4 @@ print_section "Strimzi Operators (strimzi-operators.json)" "${STRIMZI_OPERATORS_
 
 echo ""
 echo "Проверка завершена."
+exit 0
