@@ -7,8 +7,6 @@ helm repo add prometheus-community https://prometheus-community.github.io/helm-c
 helm repo update
 ```
 
-**Когда команды не нужны:** если репозиторий уже добавлен (`helm repo list | grep prometheus-community`), команду `helm repo add` можно пропустить; `helm repo update` полезен для получения актуальных чартов.
-
 2. Установить kube-prometheus-stack с Ingress для Grafana на `grafana.apatsev.org.ru` (при первом запуске установка может занять несколько минут из-за `--wait`):
 
 ```bash
@@ -23,16 +21,12 @@ helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheu
   --timeout 10m
 ```
 
-**Когда команда не нужна:** если kube-prometheus-stack уже установлен в namespace `monitoring` (`helm list -n monitoring | grep kube-prometheus-stack`), повторная установка не требуется.
-
 3. Получить пароль администратора Grafana:
 
 ```bash
 kubectl get secret -n monitoring kube-prometheus-stack-grafana -o jsonpath="{.data.admin-password}" | base64 -d
 echo
 ```
-
-**Когда команда не нужна:** если пароль уже сохранён или получен ранее.
 
 4. Открыть Grafana: http://grafana.apatsev.org.ru (логин по умолчанию: `admin`).
 
@@ -51,8 +45,6 @@ Namespace `myproject` должен существовать заранее (в �
 kubectl get ns myproject 2>/dev/null || kubectl create namespace myproject
 ```
 
-**Когда команда не нужна:** если namespace `myproject` уже существует, `kubectl get ns myproject` выполнится успешно и `kubectl create namespace` не запустится.
-
 ```bash
 helm upgrade --install strimzi-cluster-operator \
   oci://quay.io/strimzi-helm/strimzi-kafka-operator \
@@ -62,8 +54,6 @@ helm upgrade --install strimzi-cluster-operator \
   --wait \
   --version 0.50.0
 ```
-
-**Когда команда не нужна:** если Strimzi operator уже установлен в namespace `strimzi` (`helm list -n strimzi | grep strimzi-cluster-operator`), установку можно пропустить.
 
 ### Установка Kafka из examples (локальные манифесты в strimzi/)
 
@@ -77,8 +67,6 @@ kubectl apply -n myproject -f strimzi/kafka-topic.yaml
 # Пользователь Kafka
 kubectl apply -n myproject -f strimzi/kafka-user.yaml
 ```
-
-**Когда команды не нужны:** если Kafka-кластер, топик и пользователь уже созданы в `myproject`, повторный `kubectl apply` можно пропустить (идемпотентно обновит ресурсы при изменении манифестов).
 
 ```bash
 # Дождаться готовности Kafka (при первом развёртывании может занять несколько минут)
@@ -188,8 +176,6 @@ kubectl rollout status deploy/schema-registry -n schema-registry --timeout=5m
 sleep 60
 kubectl get svc -n schema-registry schema-registry
 ```
-
-**Когда команды не нужны:** если namespace `schema-registry` уже есть, топик `schemas-topic` и Deployment Schema Registry уже развёрнуты — повторный apply идемпотентен; `sleep 60` можно пропустить при перезапуске уже работавшего Karapace.
 
 **Ожидание:** `sleep 60` или дольше нужен после первого запуска Karapace, чтобы успел выбраться master; иначе приложение Producer при регистрации схем может получить ошибку 503.
 
