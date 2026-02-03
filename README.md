@@ -98,25 +98,7 @@ kubectl patch podmonitor -n monitoring cluster-operator-metrics --type=json -p='
 **ServiceMonitor для Strimzi Kafka Exporter** (kafka-metrics.yaml включает Kafka Exporter в ресурсе Kafka). Strimzi создаёт Service `my-cluster-kafka-exporter` в myproject. Создайте ServiceMonitor, чтобы Prometheus собирал метрики топиков и consumer groups:
 
 ```bash
-kubectl apply -f - <<'EOF'
-apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
-metadata:
-  name: kafka-exporter
-  namespace: monitoring
-  labels:
-    release: kube-prometheus-stack
-spec:
-  selector:
-    matchLabels:
-      strimzi.io/kind: KafkaExporter
-  namespaceSelector:
-    matchNames:
-      - myproject
-  endpoints:
-    - port: metrics
-      path: /metrics
-EOF
+kubectl apply -f strimzi/kafka-exporter-servicemonitor.yaml
 ```
 
 ```bash
