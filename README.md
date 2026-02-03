@@ -89,10 +89,7 @@ kubectl apply -n monitoring -f strimzi/entity-operator-metrics.yaml
 # Сбор JMX-метрик с подов брокеров Kafka
 kubectl apply -n monitoring -f strimzi/kafka-resources-metrics.yaml
 
-# В примерах Strimzi по умолчанию namespaceSelector: myproject (Kafka и Entity Operator в myproject). Добавить label для kube-prometheus-stack и поправить только cluster-operator на namespace strimzi:
-kubectl label podmonitor -n monitoring cluster-operator-metrics entity-operator-metrics kafka-resources-metrics release=kube-prometheus-stack --overwrite
-kubectl patch podmonitor -n monitoring cluster-operator-metrics --type=json -p='[{"op": "replace", "path": "/spec/namespaceSelector/matchNames", "value": ["strimzi"]}]'
-# entity-operator-metrics и kafka-resources-metrics уже с matchNames: [myproject] — не патчим
+# Манифесты уже включают release=kube-prometheus-stack на PodMonitor'ах. Cluster Operator развёрнут в namespace strimzi — PodMonitor сразу использует его, патч не нужен.
 ```
 
 **ServiceMonitor для Strimzi Kafka Exporter** (kafka-metrics.yaml включает Kafka Exporter в ресурсе Kafka). Strimzi создаёт Service `my-cluster-kafka-exporter` в myproject. Создайте ServiceMonitor, чтобы Prometheus собирал метрики топиков и consumer groups:
@@ -108,14 +105,10 @@ kubectl apply -n myproject -f strimzi/kube-state-metrics-configmap.yaml
 # 2. Deployment, Service, RBAC и ServiceMonitor
 kubectl apply -n myproject -f strimzi/kube-state-metrics-ksm.yaml
 
-# 3. Добавить label release: kube-prometheus-stack в ServiceMonitor, чтобы Prometheus его выбирал
-kubectl label servicemonitor -n myproject strimzi-kube-state-metrics release=kube-prometheus-stack --overwrite
-
-# 4. Добавить labels на Service (в манифесте Strimzi их нет — ServiceMonitor не находит Service)
-kubectl label svc -n myproject strimzi-kube-state-metrics app.kubernetes.io/name=kube-state-metrics app.kubernetes.io/instance=strimzi-kube-state-metrics --overwrite
-
-# 5. В манифесте Strimzi namespace=myproject — при деплое в myproject патч не нужен
+# Манифест сразу содержит release=kube-prometheus-stack в ServiceMonitor и labels на Service. Дополнительные kubectl label команды не требуются.
 ```
+
+> **Чем отличаются манифесты от upstream Strimzi:** все PodMonitor и ServiceMonitor заранее помечены `release: kube-prometheus-stack`, `cluster-operator-metrics` сразу смотрит в namespace `strimzi`, а Service для `strimzi-kube-state-metrics` уже содержит необходимые `app.kubernetes.io/*` метки. Если использовать оригинальные yaml из [официального репозитория Strimzi](https://github.com/strimzi/strimzi-kafka-operator/tree/main/packaging/examples/metrics), добавьте эти label вручную (`release: kube-prometheus-stack` на PodMonitor/ServiceMonitor и `app.kubernetes.io/*` на Service) и поправьте `namespaceSelector.matchNames` для `cluster-operator-metrics` на `strimzi`.
 
 ## Kafka Exporter
 
@@ -137,7 +130,7 @@ https://github.com/strimzi/strimzi-kafka-operator/blob/main/packaging/examples/m
 
 Проверка метрик: `./scripts/check-grafana-metrics-in-prometheus.sh` (скрипт поднимает port-forward к Prometheus). Либо в UI Prometheus (Status → Targets): targets `strimzi-kube-state-metrics`, `cluster-operator-metrics`, `kafka-resources-metrics`, `kafka-exporter` в состоянии up.
 
-Метрики `kafka_consumergroup_current_offset` и `kafka_consumergroup_lag` появляются в Prometheus только при наличии активных consumer groups (например, после запуска Consumer); без потребителей скрипт проверки покажет их как отсутствующие — это ожидаемо. **После установки Producer и Consumer подождите 30–60 секунд** перед запуском скрипта проверки метрик, чтобы Prometheus успел собрать метрики consumer group.
+Метрики `kafka_consumergroup_current_offset` и `kafka_consumergroup_lag` появляются в Prometheus только при наличии активных consumer groups (например, после запуска Consumer); без потребителей скрипт проверки покажет их как отсутствующие — это ожидаемо. **После установки Producer и Consumer подождите 45–60 секунд** перед запуском скрипта проверки метрик (например, `sleep 45`), чтобы Prometheus успел собрать метрики consumer group.
 
 ### Schema Registry (Karapace) для Avro
 

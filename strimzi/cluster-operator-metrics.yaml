@@ -4,13 +4,14 @@ metadata:
   name: cluster-operator-metrics
   labels:
     app: strimzi
+    release: kube-prometheus-stack
 spec:
   selector:
     matchLabels:
       strimzi.io/kind: cluster-operator
   namespaceSelector:
     matchNames:
-      - myproject
+      - strimzi
   podMetricsEndpoints:
   - path: /metrics
     port: http

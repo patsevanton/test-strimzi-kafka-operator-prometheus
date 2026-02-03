@@ -5,6 +5,7 @@ metadata:
   name: entity-operator-metrics
   labels:
     app: strimzi
+    release: kube-prometheus-stack
 spec:
   selector:
     matchLabels:
