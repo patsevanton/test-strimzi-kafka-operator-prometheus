@@ -109,7 +109,7 @@ kubectl apply -n myproject -f strimzi/kube-state-metrics-ksm.yaml
 
 Kafka Exporter подключается к брокерам по Kafka API и отдаёт метрики в формате Prometheus.
 
-**kafka-metrics.yaml** уже включает блок **`spec.kafkaExporter`** в ресурсе `Kafka` (CR Strimzi). Это и есть активация: без этого блока Strimzi не создаёт Kafka Exporter; оператор развернёт его (Deployment, Pod, Service) в namespace кластера.
+**kafka-metrics.yaml** уже включает блок **`spec.kafkaExporter`** в ресурсе `Kafka` (CR Strimzi). Этот блок включает Kafka Exporter: без него оператор не создаёт соответствующие ресурсы, а при его наличии — автоматически разворачивает Deployment, Pod и Service в namespace кластера.
 
 **ServiceMonitor для Strimzi Kafka Exporter:** Strimzi создаёт Service `my-cluster-kafka-exporter` в myproject. Создайте ServiceMonitor, чтобы Prometheus собирал метрики топиков и consumer groups:
 
