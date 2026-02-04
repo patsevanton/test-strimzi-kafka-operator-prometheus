@@ -169,7 +169,7 @@ kubectl get svc -n schema-registry schema-registry
 
 ### Сборка и публикация Docker образа
 
-Go-код в `main.go` можно изменять под свои нужды. После внесения изменений соберите и опубликуйте Docker образ:
+Go-код в `[main.go](https://github.com/patsevanton/test-strimzi-kafka-operator-prometheus/blob/main/main.go)` можно изменять под свои нужды. После внесения изменений соберите и опубликуйте Docker образ:
 
 ```bash
 # Сборка образа (используйте podman или docker)
