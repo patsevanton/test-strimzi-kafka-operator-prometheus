@@ -138,10 +138,6 @@ https://github.com/strimzi/strimzi-kafka-operator/blob/main/packaging/examples/m
 
 https://github.com/strimzi/strimzi-kafka-operator/blob/main/packaging/examples/metrics/grafana-dashboards/strimzi-operators.json
 
-Проверка метрик: `./scripts/check-grafana-metrics-in-prometheus.sh` (скрипт поднимает port-forward к Prometheus). Либо в UI Prometheus (Status → Targets): targets `strimzi-kube-state-metrics`, `cluster-operator-metrics`, `kafka-resources-metrics`, `kafka-exporter` в состоянии up.
-
-Метрики `kafka_consumergroup_current_offset` и `kafka_consumergroup_lag` появляются в Prometheus только при наличии активных consumer groups (например, после запуска Consumer); без потребителей скрипт проверки покажет их как отсутствующие — это ожидаемо. **После установки Producer и Consumer подождите 45–60 секунд** перед запуском скрипта проверки метрик (например, `sleep 45`), чтобы Prometheus успел собрать метрики consumer group.
-
 ### Schema Registry (Karapace) для Avro
 
 Go-приложение из этого репозитория использует Avro и Schema Registry API. Для удобства здесь добавлены готовые манифесты для **[Karapace](https://github.com/Aiven-Open/karapace)** — open-source реализации API Confluent Schema Registry (drop-in replacement).
