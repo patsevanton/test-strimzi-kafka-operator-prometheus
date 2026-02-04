@@ -109,7 +109,7 @@ kubectl apply -n myproject -f strimzi/kube-state-metrics-ksm.yaml
 
 Kafka Exporter ([danielqsj/kafka_exporter](https://github.com/danielqsj/kafka_exporter)) подключается к брокерам по Kafka API и отдаёт метрики в формате Prometheus.
 
-**kafka-metrics.yaml** уже включает Kafka Exporter в ресурсе `Kafka` (`spec.kafkaExporter`). Strimzi развернёт его в namespace кластера. Для сбора метрик добавьте ServiceMonitor с label `release=kube-prometheus-stack`.
+**kafka-metrics.yaml** уже включает блок **`spec.kafkaExporter`** в ресурсе `Kafka` (CR Strimzi). Это и есть активация: без этого блока Strimzi не создаёт Kafka Exporter; оператор развернёт его (Deployment, Pod, Service) в namespace кластера.
 
 **ServiceMonitor для Strimzi Kafka Exporter:** Strimzi создаёт Service `my-cluster-kafka-exporter` в myproject. Создайте ServiceMonitor, чтобы Prometheus собирал метрики топиков и consumer groups:
 
@@ -117,11 +117,7 @@ Kafka Exporter ([danielqsj/kafka_exporter](https://github.com/danielqsj/kafka_ex
 kubectl apply -f strimzi/kafka-exporter-servicemonitor.yaml
 ```
 
-### Как включается Kafka Exporter
-
-Активация — добавление блока **`spec.kafkaExporter`** в ресурс **Kafka** (CR Strimzi). Без этого блока Kafka Exporter не создаётся.
-
-При указании `kafkaExporter` Strimzi Cluster Operator поднимает **отдельный Deployment** с подом Kafka Exporter: создаётся Deployment (например, `my-cluster-kafka-exporter`), Pod и Service `my-cluster-kafka-exporter` в namespace кластера (например, `myproject`). То есть это не «просто параметр» в поде Kafka, а отдельное приложение, которым управляет оператор.
+При указании `kafkaExporter` в CR Strimzi Cluster Operator поднимает **отдельный Deployment** (например, `my-cluster-kafka-exporter`) — это не «просто параметр» в поде Kafka, а отдельное приложение, которым управляет оператор.
 
 Kafka Exporter **встроен в Strimzi** как опциональный компонент: образ и конфигурация задаются оператором, он создаёт и обновляет Deployment/Service при изменении CR.
 
