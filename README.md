@@ -79,7 +79,7 @@ kubectl wait kafka/my-cluster -n myproject --for=condition=Ready --timeout=600s
 
 ### Metrics (examples/metrics)
 
-Kafka развёрнут из **kafka-metrics.yaml** — JMX-метрики (`metricsConfig`) и Kafka Exporter уже включены в манифест. Остаётся применить PodMonitors для сбора метрик в Prometheus.
+Кластер Kafka задаётся манифестом **kafka-metrics.yaml** (ресурс `Kafka` CR Strimzi) — JMX-метрики (`metricsConfig`) и Kafka Exporter уже включены в манифест. Остаётся применить PodMonitors для сбора метрик в Prometheus.
 
 ```bash
 # Сбор метрик Strimzi Cluster Operator (состояние оператора, реконсиляция)
@@ -104,8 +104,6 @@ kubectl apply -n myproject -f strimzi/kube-state-metrics-configmap.yaml
 
 # 2. Deployment, Service, RBAC и ServiceMonitor
 kubectl apply -n myproject -f strimzi/kube-state-metrics-ksm.yaml
-
-# Манифест сразу содержит release=kube-prometheus-stack в ServiceMonitor и labels на Service. Дополнительные kubectl label команды не требуются.
 ```
 
 ## Kafka Exporter
