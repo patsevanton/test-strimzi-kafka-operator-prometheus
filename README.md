@@ -36,7 +36,7 @@ echo
 
 Strimzi — оператор для управления Kafka в Kubernetes; мониторинг вынесен в отдельные компоненты (Kafka Exporter, kube-state-metrics, PodMonitors для брокеров и операторов).
 
-Манифесты из examples Strimzi сохранены локально в директории **strimzi/** (kafka-metrics, kafka-topic, kafka-user, PodMonitors, kube-state-metrics). Установка — через `kubectl apply -f strimzi/...`.
+Манифесты из [examples](https://github.com/strimzi/strimzi-kafka-operator/tree/main/examples) Strimzi сохранены локально в директории **strimzi/** (kafka-metrics, kafka-topic, kafka-user, PodMonitors, kube-state-metrics). Установка — через `kubectl apply -f strimzi/...`.
 
 ### Установка Strimzi
 
