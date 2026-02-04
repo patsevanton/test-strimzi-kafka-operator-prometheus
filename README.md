@@ -57,6 +57,8 @@ helm upgrade --install strimzi-cluster-operator \
   --version 0.50.0
 ```
 
+> **Чем отличаются манифесты от upstream Strimzi:** все PodMonitor и ServiceMonitor заранее помечены `release: kube-prometheus-stack`, `cluster-operator-metrics` сразу смотрит в namespace `strimzi`, а Service для `strimzi-kube-state-metrics` уже содержит необходимые `app.kubernetes.io/*` метки. Если использовать оригинальные yaml из [официального репозитория Strimzi](https://github.com/strimzi/strimzi-kafka-operator/tree/main/packaging/examples/metrics), добавьте эти label вручную (`release: kube-prometheus-stack` на PodMonitor/ServiceMonitor и `app.kubernetes.io/*` на Service) и поправьте `namespaceSelector.matchNames` для `cluster-operator-metrics` на `strimzi`.
+
 ### Установка Kafka из examples (локальные манифесты в strimzi/)
 
 ```bash
@@ -109,8 +111,6 @@ kubectl apply -n myproject -f strimzi/kube-state-metrics-ksm.yaml
 
 # Манифест сразу содержит release=kube-prometheus-stack в ServiceMonitor и labels на Service. Дополнительные kubectl label команды не требуются.
 ```
-
-> **Чем отличаются манифесты от upstream Strimzi:** все PodMonitor и ServiceMonitor заранее помечены `release: kube-prometheus-stack`, `cluster-operator-metrics` сразу смотрит в namespace `strimzi`, а Service для `strimzi-kube-state-metrics` уже содержит необходимые `app.kubernetes.io/*` метки. Если использовать оригинальные yaml из [официального репозитория Strimzi](https://github.com/strimzi/strimzi-kafka-operator/tree/main/packaging/examples/metrics), добавьте эти label вручную (`release: kube-prometheus-stack` на PodMonitor/ServiceMonitor и `app.kubernetes.io/*` на Service) и поправьте `namespaceSelector.matchNames` для `cluster-operator-metrics` на `strimzi`.
 
 ## Kafka Exporter
 
