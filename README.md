@@ -92,12 +92,6 @@ kubectl apply -n monitoring -f strimzi/entity-operator-metrics.yaml
 kubectl apply -n monitoring -f strimzi/kafka-resources-metrics.yaml
 ```
 
-**ServiceMonitor для Strimzi Kafka Exporter** (kafka-metrics.yaml включает Kafka Exporter в ресурсе Kafka). Strimzi создаёт Service `my-cluster-kafka-exporter` в myproject. Создайте ServiceMonitor, чтобы Prometheus собирал метрики топиков и consumer groups:
-
-```bash
-kubectl apply -f strimzi/kafka-exporter-servicemonitor.yaml
-```
-
 **Kube-state-metrics для Strimzi CRD** — отдельный экземпляр [kube-state-metrics](https://github.com/kubernetes/kube-state-metrics) в режиме `--custom-resource-state-only`: он следит за **кастомными ресурсами Strimzi** (Kafka, KafkaTopic, KafkaUser, KafkaConnect, KafkaConnector и др.) и отдаёт их состояние в формате Prometheus (ready, replicas, topicId, kafka_version и т.д.). Это нужно для дашбордов и алертов по состоянию CR (например, «топик не Ready», «Kafka не на целевой версии»). Обычный kube-state-metrics из kube-prometheus-stack таких метрик по Strimzi не даёт.
 
 - **Шаг 1 (ConfigMap):** описание, какие CRD и какие поля из них экспортировать как метрики (префиксы `strimzi_kafka_topic_*`, `strimzi_kafka_user_*`, `strimzi_kafka_*` и т.д.).
@@ -116,6 +110,12 @@ kubectl apply -n myproject -f strimzi/kube-state-metrics-ksm.yaml
 Kafka Exporter ([danielqsj/kafka_exporter](https://github.com/danielqsj/kafka_exporter)) подключается к брокерам по Kafka API и отдаёт метрики в формате Prometheus.
 
 **kafka-metrics.yaml** уже включает Kafka Exporter в ресурсе `Kafka` (`spec.kafkaExporter`). Strimzi развернёт его в namespace кластера. Для сбора метрик добавьте ServiceMonitor с label `release=kube-prometheus-stack`.
+
+**ServiceMonitor для Strimzi Kafka Exporter:** Strimzi создаёт Service `my-cluster-kafka-exporter` в myproject. Создайте ServiceMonitor, чтобы Prometheus собирал метрики топиков и consumer groups:
+
+```bash
+kubectl apply -f strimzi/kafka-exporter-servicemonitor.yaml
+```
 
 ### Как включается Kafka Exporter
 
