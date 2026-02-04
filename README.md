@@ -116,6 +116,14 @@ Kafka Exporter ([danielqsj/kafka_exporter](https://github.com/danielqsj/kafka_ex
 
 **kafka-metrics.yaml** уже включает Kafka Exporter в ресурсе `Kafka` (`spec.kafkaExporter`). Strimzi развернёт его в namespace кластера. Для сбора метрик добавьте ServiceMonitor с label `release=kube-prometheus-stack`.
 
+### Как включается Kafka Exporter
+
+Активация — добавление блока **`spec.kafkaExporter`** в ресурс **Kafka** (CR Strimzi). Без этого блока Kafka Exporter не создаётся.
+
+При указании `kafkaExporter` Strimzi Cluster Operator поднимает **отдельный Deployment** с подом Kafka Exporter: создаётся Deployment (например, `my-cluster-kafka-exporter`), Pod и Service `my-cluster-kafka-exporter` в namespace кластера (например, `myproject`). То есть это не «просто параметр» в поде Kafka, а отдельное приложение, которым управляет оператор.
+
+Kafka Exporter **встроен в Strimzi** как опциональный компонент: образ и конфигурация задаются оператором, он создаёт и обновляет Deployment/Service при изменении CR. Используется проект [danielqsj/kafka_exporter](https://github.com/danielqsj/kafka_exporter), развёртыванием управляет Strimzi.
+
 ## Импорт дашбордов Grafana
 
 Импорт JSON из `examples/metrics/grafana-dashboards/` через UI Grafana:
