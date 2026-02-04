@@ -98,6 +98,11 @@ kubectl apply -n monitoring -f strimzi/kafka-resources-metrics.yaml
 kubectl apply -f strimzi/kafka-exporter-servicemonitor.yaml
 ```
 
+**Kube-state-metrics для Strimzi CRD** — отдельный экземпляр [kube-state-metrics](https://github.com/kubernetes/kube-state-metrics) в режиме `--custom-resource-state-only`: он следит за **кастомными ресурсами Strimzi** (Kafka, KafkaTopic, KafkaUser, KafkaConnect, KafkaConnector и др.) и отдаёт их состояние в формате Prometheus (ready, replicas, topicId, kafka_version и т.д.). Это нужно для дашбордов и алертов по состоянию CR (например, «топик не Ready», «Kafka не на целевой версии»). Обычный kube-state-metrics из kube-prometheus-stack таких метрик по Strimzi не даёт.
+
+- **Шаг 1 (ConfigMap):** описание, какие CRD и какие поля из них экспортировать как метрики (префиксы `strimzi_kafka_topic_*`, `strimzi_kafka_user_*`, `strimzi_kafka_*` и т.д.).
+- **Шаг 2 (Deployment + RBAC + ServiceMonitor):** сам под kube-state-metrics с этим конфигом, права на list/watch Strimzi CR в кластере и ServiceMonitor, чтобы Prometheus начал скрейпить метрики.
+
 ```bash
 # 1. ConfigMap с конфигом метрик по CRD Strimzi
 kubectl apply -n myproject -f strimzi/kube-state-metrics-configmap.yaml
