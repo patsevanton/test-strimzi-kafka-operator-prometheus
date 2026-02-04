@@ -256,3 +256,15 @@ https://github.com/strimzi/strimzi-kafka-operator/blob/main/packaging/examples/m
 
 https://github.com/strimzi/strimzi-kafka-operator/blob/main/packaging/examples/metrics/grafana-dashboards/strimzi-operators.json
 
+## Скриншоты
+
+![Скриншот 1](1.png)
+![Скриншот 2](2.png)
+![Скриншот 3](3.png)
+![Скриншот 4](4.png)
+![Скриншот 5](5.png)
+![Скриншот 6](6.png)
+![Скриншот 7](7.png)
+![Скриншот 8](8.png)
+![Скриншот 9](9.png)
+![Скриншот 10](10.png)
