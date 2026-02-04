@@ -1,3 +1,5 @@
+Цель этой статьи — восполнить пробел в документации связки Strimzi Kafka и мониторинга. У Strimzi есть [раздел про метрики и Prometheus](https://strimzi.io/docs/operators/latest/deploying.html#assembly-metrics-strimzi) и примеры в репозитории ([examples/metrics/prometheus-install](https://github.com/strimzi/strimzi-kafka-operator/tree/main/examples/metrics/prometheus-install)), но они рассчитаны на общий Prometheus Operator; пошагового руководства именно под Helm-чарт **kube-prometheus-stack** (с порядком установки и нужными label’ами) в открытом доступе не нашлось. Ниже — собранный и проверенный вариант такой установки.
+
 ## Установка Prometheus stack (kube-prometheus-stack)
 
 1. Добавить репозиторий Helm:
