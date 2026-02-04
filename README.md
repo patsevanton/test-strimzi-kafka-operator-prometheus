@@ -82,8 +82,6 @@ kubectl wait kafka/my-cluster -n myproject --for=condition=Ready --timeout=600s
 Kafka развёрнут из **kafka-metrics.yaml** — JMX-метрики (`metricsConfig`) и Kafka Exporter уже включены в манифест. Остаётся применить PodMonitors для сбора метрик в Prometheus.
 
 ```bash
-# PodMonitors для Prometheus: сбор метрик Strimzi Cluster Operator, Entity Operator (Topic/User) и Kafka-брокеров (JMX)
-
 # Сбор метрик Strimzi Cluster Operator (состояние оператора, реконсиляция)
 kubectl apply -n monitoring -f strimzi/cluster-operator-metrics.yaml
 
