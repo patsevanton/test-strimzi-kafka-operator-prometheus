@@ -234,12 +234,17 @@ kubectl rollout status deploy/kafka-consumer -n kafka-consumer --timeout=120s
 # Либо следить за подами: kubectl get pods -n myproject; kubectl get pods -n kafka-consumer -w
 ```
 
-#### 4) Проверка логов
+#### 4) Проверка подов и логов
 ```bash
-# Producer logs
+# Убедиться, что все поды в статусе Running
+kubectl get pods -n myproject
+kubectl get pods -n kafka-consumer
+kubectl get pods -n schema-registry
+
+# Producer logs (проверка на ошибки)
 kubectl logs -n myproject -l app.kubernetes.io/name=kafka-producer -f
 
-# Consumer logs
+# Consumer logs (проверка на ошибки)
 kubectl logs -n kafka-consumer -l app.kubernetes.io/name=kafka-consumer -f
 ```
 
