@@ -270,3 +270,5 @@ https://github.com/strimzi/strimzi-kafka-operator/blob/main/packaging/examples/m
 ![Скриншот 8](8.png)
 ![Скриншот 9](9.png)
 ![Скриншот 10](10.png)
+
+Подписывайтесь.
