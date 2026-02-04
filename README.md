@@ -38,8 +38,6 @@ echo
 
 Strimzi — оператор для управления Kafka в Kubernetes; мониторинг вынесен в отдельные компоненты (Kafka Exporter, kube-state-metrics, PodMonitors для брокеров и операторов).
 
-Манифесты из [examples](https://github.com/strimzi/strimzi-kafka-operator/tree/main/examples) Strimzi сохранены локально в директории **strimzi/** (kafka-metrics, kafka-topic, kafka-user, PodMonitors, kube-state-metrics). Установка — через `kubectl apply -f strimzi/...`.
-
 ### Установка Strimzi
 
 Namespace `myproject` должен существовать заранее (в примерах Strimzi по умолчанию используется именно он):
@@ -61,7 +59,9 @@ helm upgrade --install strimzi-cluster-operator \
 
 > **Чем отличаются манифесты от upstream Strimzi:** все PodMonitor и ServiceMonitor заранее помечены `release: kube-prometheus-stack`, `cluster-operator-metrics` сразу смотрит в namespace `strimzi`, а Service для `strimzi-kube-state-metrics` уже содержит необходимые `app.kubernetes.io/*` метки. Если использовать оригинальные yaml из [официального репозитория Strimzi](https://github.com/strimzi/strimzi-kafka-operator/tree/main/packaging/examples/metrics), добавьте эти label вручную (`release: kube-prometheus-stack` на PodMonitor/ServiceMonitor и `app.kubernetes.io/*` на Service) и поправьте `namespaceSelector.matchNames` для `cluster-operator-metrics` на `strimzi`.
 
-### Установка Kafka из examples (локальные манифесты в strimzi/)
+Манифесты из [examples](https://github.com/strimzi/strimzi-kafka-operator/tree/main/examples) Strimzi сохранены локально в директории **strimzi/** (kafka-metrics, kafka-topic, kafka-user, PodMonitors, kube-state-metrics). Вы можете использовать оригинальные манифесты + добавление label или можете использовать манифесты из репозитория https://github.com/patsevanton/test-strimzi-kafka-operator-prometheus.
+
+### Установка Kafka из examples
 
 ```bash
 # Kafka-кластер (KRaft, persistent, JMX-метрики и Kafka Exporter из коробки)
