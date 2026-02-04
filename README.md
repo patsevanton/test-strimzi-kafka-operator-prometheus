@@ -123,7 +123,7 @@ Kafka Exporter ([danielqsj/kafka_exporter](https://github.com/danielqsj/kafka_ex
 
 При указании `kafkaExporter` Strimzi Cluster Operator поднимает **отдельный Deployment** с подом Kafka Exporter: создаётся Deployment (например, `my-cluster-kafka-exporter`), Pod и Service `my-cluster-kafka-exporter` в namespace кластера (например, `myproject`). То есть это не «просто параметр» в поде Kafka, а отдельное приложение, которым управляет оператор.
 
-Kafka Exporter **встроен в Strimzi** как опциональный компонент: образ и конфигурация задаются оператором, он создаёт и обновляет Deployment/Service при изменении CR. Используется проект [danielqsj/kafka_exporter](https://github.com/danielqsj/kafka_exporter), развёртыванием управляет Strimzi.
+Kafka Exporter **встроен в Strimzi** как опциональный компонент: образ и конфигурация задаются оператором, он создаёт и обновляет Deployment/Service при изменении CR.
 
 ## Импорт дашбордов Grafana
 
