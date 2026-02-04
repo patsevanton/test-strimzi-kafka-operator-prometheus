@@ -250,7 +250,7 @@ kubectl logs -n kafka-consumer -l app.kubernetes.io/name=kafka-consumer -f
 
 ## Импорт дашбордов Grafana
 
-Импорт JSON из `examples/metrics/grafana-dashboards/` через UI Grafana:
+Импорт JSON дашбордов через UI Grafana:
 
 https://github.com/strimzi/strimzi-kafka-operator/blob/main/packaging/examples/metrics/grafana-dashboards/strimzi-kafka-exporter.json
 
