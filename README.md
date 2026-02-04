@@ -92,8 +92,6 @@ kubectl apply -n monitoring -f strimzi/entity-operator-metrics.yaml
 
 # Сбор JMX-метрик с подов брокеров Kafka
 kubectl apply -n monitoring -f strimzi/kafka-resources-metrics.yaml
-
-# Манифесты уже включают release=kube-prometheus-stack на PodMonitor'ах. Cluster Operator развёрнут в namespace strimzi — PodMonitor сразу использует его, патч не нужен.
 ```
 
 **ServiceMonitor для Strimzi Kafka Exporter** (kafka-metrics.yaml включает Kafka Exporter в ресурсе Kafka). Strimzi создаёт Service `my-cluster-kafka-exporter` в myproject. Создайте ServiceMonitor, чтобы Prometheus собирал метрики топиков и consumer groups:
